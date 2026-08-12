@@ -2,7 +2,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../core/api_client.dart';
 import '../core/app_colors.dart';
+import '../services/auth_api.dart';
+import '../services/workshop_api.dart';
 import '../widgets/file_upload_button.dart';
 import '../widgets/floating_label_field.dart';
 import '../widgets/map_location_preview.dart';
@@ -12,7 +15,16 @@ import '../widgets/section_card.dart';
 import '../widgets/service_chip_group.dart';
 import '../widgets/verification_timeline.dart';
 import 'login_screen.dart';
-import 'pending_verification_screen.dart';
+import 'workshop_owner/workshop_owner_main.dart';
+
+/// A document picked from disk/camera, read into memory immediately so it
+/// can be uploaded regardless of platform (web has no filesystem path).
+class _PickedFile {
+  const _PickedFile({required this.name, required this.bytes});
+
+  final String name;
+  final List<int> bytes;
+}
 
 const List<String> _offeredServices = <String>[
   'Towing',
@@ -68,10 +80,10 @@ class _WorkshopRegistrationScreenState
   final TextEditingController _addressController = TextEditingController();
 
   bool _obscurePassword = true;
-  String? _businessCertFileName;
-  String? _ownerIdFrontFileName;
-  String? _ownerIdBackFileName;
-  String? _facePhotoFileName;
+  _PickedFile? _businessCert;
+  _PickedFile? _ownerIdFront;
+  _PickedFile? _ownerIdBack;
+  _PickedFile? _facePhoto;
   bool _isSubmitting = false;
 
   final ImagePicker _imagePicker = ImagePicker();
@@ -127,20 +139,19 @@ class _WorkshopRegistrationScreenState
     });
   }
 
-  Future<void> _pickDocument({required bool isBusinessCert}) async {
+  Future<void> _pickDocument() async {
     final FilePickerResult? result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: <String>['pdf', 'jpg', 'jpeg', 'png'],
+      withData: true,
     );
     if (result == null || result.files.isEmpty || !mounted) return;
 
-    setState(() {
-      if (isBusinessCert) {
-        _businessCertFileName = result.files.single.name;
-      } else {
-        _ownerIdFrontFileName = result.files.single.name;
-      }
-    });
+    final PlatformFile file = result.files.single;
+    final List<int>? bytes = file.bytes;
+    if (bytes == null) return;
+
+    setState(() => _businessCert = _PickedFile(name: file.name, bytes: bytes));
   }
 
   Future<ImageSource?> _chooseImageSource() {
@@ -172,14 +183,17 @@ class _WorkshopRegistrationScreenState
     );
   }
 
-  Future<void> _pickIdentityPhoto(void Function(String fileName) onPicked) async {
+  Future<void> _pickIdentityPhoto(void Function(_PickedFile file) onPicked) async {
     final ImageSource? source = await _chooseImageSource();
     if (source == null || !mounted) return;
 
     final XFile? photo = await _imagePicker.pickImage(source: source, imageQuality: 85);
     if (photo == null || !mounted) return;
 
-    setState(() => onPicked(photo.name));
+    final List<int> bytes = await photo.readAsBytes();
+    if (!mounted) return;
+
+    setState(() => onPicked(_PickedFile(name: photo.name, bytes: bytes)));
   }
 
   void _setPhysicalLocation() {
@@ -207,22 +221,82 @@ class _WorkshopRegistrationScreenState
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
 
-    // TODO: re-enable the `_formKey.currentState?.validate()` /
-    // `_selectedServices` gating once the real registration backend exists
-    // — skipped for now so every screen stays reachable while there's
-    // nothing to submit to.
+    final bool formValid = _formKey.currentState?.validate() ?? false;
+    setState(() {
+      if (_selectedServices.isEmpty) {
+        _servicesError = 'Please select at least one service';
+      }
+    });
+    if (!formValid || _selectedServices.isEmpty) return;
 
     setState(() => _isSubmitting = true);
+    try {
+      await AuthApi.registerWorkshop(
+        fullName: _fullNameController.text.trim(),
+        email: _emailController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+        password: _passwordController.text,
+        workshopName: _workshopNameController.text.trim(),
+        nationalIdNumber: _nationalIdController.text.trim(),
+        taxIdNumber: _taxIdController.text.trim(),
+        address: _addressController.text.trim(),
+        latitude: _latitude,
+        longitude: _longitude,
+        services: _selectedServices.toList(),
+      );
+      if (!mounted) return;
 
-    // TODO: POST /api/workshops/register with the collected payload
-    // (owner identity, credentials, documents, location, services).
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
+      await _uploadDocuments();
+      if (!mounted) return;
 
-    setState(() => _isSubmitting = false);
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(builder: (_) => const PendingVerificationScreen()),
-    );
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(builder: (_) => const WorkshopOwnerMain()),
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          content: Text(error.message),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  /// Best-effort: the workshop account already exists once registration
+  /// succeeds, so a failed upload here shouldn't block the user — they can
+  /// re-attach documents later. Each failure surfaces its own warning.
+  Future<void> _uploadDocuments() async {
+    final List<(WorkshopDocumentType, _PickedFile?)> documents =
+        <(WorkshopDocumentType, _PickedFile?)>[
+          (WorkshopDocumentType.businessCertificate, _businessCert),
+          (WorkshopDocumentType.ownerIdFront, _ownerIdFront),
+          (WorkshopDocumentType.ownerIdBack, _ownerIdBack),
+          (WorkshopDocumentType.facePhoto, _facePhoto),
+        ];
+
+    for (final (WorkshopDocumentType type, _PickedFile? file) in documents) {
+      if (file == null) continue;
+      try {
+        await WorkshopApi.uploadDocument(
+          type: type,
+          fileBytes: file.bytes,
+          fileName: file.name,
+        );
+      } on ApiException catch (error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFDC2626),
+            behavior: SnackBarBehavior.floating,
+            content: Text('Failed to upload ${file.name}: ${error.message}'),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -353,35 +427,35 @@ class _WorkshopRegistrationScreenState
                     FileUploadButton(
                       title: 'Upload Business Registration Certificate',
                       helperText: 'PDF, JPG or PNG (Max 5MB)',
-                      attached: _businessCertFileName != null,
-                      fileName: _businessCertFileName,
-                      onTap: () => _pickDocument(isBusinessCert: true),
+                      attached: _businessCert != null,
+                      fileName: _businessCert?.name,
+                      onTap: _pickDocument,
                     ),
                     FileUploadButton(
                       title: 'Owner National ID — Front',
                       helperText: 'Take a photo or upload from device',
-                      attached: _ownerIdFrontFileName != null,
-                      fileName: _ownerIdFrontFileName,
+                      attached: _ownerIdFront != null,
+                      fileName: _ownerIdFront?.name,
                       onTap: () => _pickIdentityPhoto(
-                        (String fileName) => _ownerIdFrontFileName = fileName,
+                        (_PickedFile file) => _ownerIdFront = file,
                       ),
                     ),
                     FileUploadButton(
                       title: 'Owner National ID — Back',
                       helperText: 'Take a photo or upload from device',
-                      attached: _ownerIdBackFileName != null,
-                      fileName: _ownerIdBackFileName,
+                      attached: _ownerIdBack != null,
+                      fileName: _ownerIdBack?.name,
                       onTap: () => _pickIdentityPhoto(
-                        (String fileName) => _ownerIdBackFileName = fileName,
+                        (_PickedFile file) => _ownerIdBack = file,
                       ),
                     ),
                     FileUploadButton(
                       title: 'Face Photo (Selfie)',
                       helperText: 'Clear photo of your face, for identity matching',
-                      attached: _facePhotoFileName != null,
-                      fileName: _facePhotoFileName,
+                      attached: _facePhoto != null,
+                      fileName: _facePhoto?.name,
                       onTap: () => _pickIdentityPhoto(
-                        (String fileName) => _facePhotoFileName = fileName,
+                        (_PickedFile file) => _facePhoto = file,
                       ),
                     ),
                   ],

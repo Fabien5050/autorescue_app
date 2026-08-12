@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../core/app_colors.dart';
 import '../models/workshop.dart';
 import '../widgets/rating_badge.dart';
-import '../widgets/stylized_map.dart';
 
 IconData _iconForService(String service) {
   final String s = service.toLowerCase();
@@ -121,9 +121,27 @@ class WorkshopProfileScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 10),
-                StylizedMap(
-                  pins: <MapPin>[MapPin(alignment: workshop.pinAlignment, color: AppColors.navy)],
-                ),
+                if (workshop.latitude != null && workshop.longitude != null)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: SizedBox(
+                      height: 160,
+                      width: double.infinity,
+                      child: GoogleMap(
+                        initialCameraPosition: CameraPosition(
+                          target: LatLng(workshop.latitude!, workshop.longitude!),
+                          zoom: 15,
+                        ),
+                        zoomControlsEnabled: false,
+                        markers: <Marker>{
+                          Marker(
+                            markerId: const MarkerId('workshop-location'),
+                            position: LatLng(workshop.latitude!, workshop.longitude!),
+                          ),
+                        },
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),

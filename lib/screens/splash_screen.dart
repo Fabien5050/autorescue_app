@@ -3,10 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../core/app_colors.dart';
+import '../core/session.dart';
 import '../widgets/brand_logo.dart';
 import '../widgets/loading_dots.dart';
 import '../widgets/road_backdrop.dart';
+import 'driver_main_dashboard.dart';
 import 'login_screen.dart';
+import 'workshop_owner/workshop_owner_main.dart';
 
 /// Branded splash. Auto-advances after [_holdDuration], or immediately on tap.
 class SplashScreen extends StatefulWidget {
@@ -22,6 +25,7 @@ class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   Timer? _timer;
   bool _navigated = false;
+  final Future<void> _restoreFuture = Session.instance.restore();
 
   late final AnimationController _intro = AnimationController(
     vsync: this,
@@ -46,18 +50,27 @@ class _SplashScreenState extends State<SplashScreen>
     super.dispose();
   }
 
-  void _goToLogin() {
+  Future<void> _goToLogin() async {
     // Guard against the tap and the timer both firing.
     if (_navigated || !mounted) return;
     _navigated = true;
     _timer?.cancel();
+
+    await _restoreFuture;
+    if (!mounted) return;
+
+    final Widget destination = !Session.instance.isLoggedIn
+        ? const LoginScreen()
+        : Session.instance.role == 'MECHANIC'
+            ? const WorkshopOwnerMain()
+            : const DriverMainDashboard();
 
     Navigator.of(context).pushReplacement(
       PageRouteBuilder<void>(
         transitionDuration: const Duration(milliseconds: 450),
         pageBuilder: (BuildContext context, Animation<double> animation,
                 Animation<double> secondary) =>
-            const LoginScreen(),
+            destination,
         transitionsBuilder: (BuildContext context, Animation<double> animation,
                 Animation<double> secondary, Widget child) =>
             FadeTransition(opacity: animation, child: child),

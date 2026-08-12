@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../core/api_client.dart';
 import '../core/app_colors.dart';
 import '../models/user_role.dart';
+import '../services/payment_api.dart';
 import '../widgets/floating_label_field.dart';
 import '../widgets/primary_button.dart';
 import 'location_permission_screen.dart';
@@ -9,18 +11,30 @@ import 'workshop_owner/workshop_owner_main.dart';
 
 enum PaymentMethod { mtn, orangeMoney, card }
 
+extension on PaymentMethod {
+  String get wireName => switch (this) {
+    PaymentMethod.mtn => 'MTN_MOMO',
+    PaymentMethod.orangeMoney => 'ORANGE_MONEY',
+    PaymentMethod.card => 'CARD',
+  };
+}
+
 class _PlanDetails {
   const _PlanDetails({
     required this.bannerText,
     required this.summaryTitle,
     required this.licenseSubtitle,
     required this.amountLabel,
+    required this.amount,
+    required this.purpose,
   });
 
   final String bannerText;
   final String summaryTitle;
   final String licenseSubtitle;
   final String amountLabel;
+  final double amount;
+  final String purpose;
 }
 
 const Map<UserRole, _PlanDetails> _plans = <UserRole, _PlanDetails>{
@@ -30,6 +44,8 @@ const Map<UserRole, _PlanDetails> _plans = <UserRole, _PlanDetails>{
     summaryTitle: 'AutoRescue Driver Platform Activation Fee',
     licenseSubtitle: 'One-time Registration Fee',
     amountLabel: '2,000 FCFA',
+    amount: 2000,
+    purpose: 'DRIVER_ACTIVATION',
   ),
   UserRole.mechanic: _PlanDetails(
     bannerText: 'Application Approved! Pay the platform subscription fee to '
@@ -38,6 +54,8 @@ const Map<UserRole, _PlanDetails> _plans = <UserRole, _PlanDetails>{
     summaryTitle: 'AutoRescue Workshop Platform Activation Fee',
     licenseSubtitle: '1-Year License',
     amountLabel: '5,000 FCFA',
+    amount: 5000,
+    purpose: 'WORKSHOP_ACTIVATION',
   ),
 };
 
@@ -89,32 +107,51 @@ class _PaymentScreenState extends State<PaymentScreen> {
     return null;
   }
 
+  String? _phoneNumberFor(PaymentMethod method) {
+    final String digits = switch (method) {
+      PaymentMethod.mtn => _mtnPhoneController.text.trim(),
+      PaymentMethod.orangeMoney => _orangePhoneController.text.trim(),
+      PaymentMethod.card => '',
+    };
+    return digits.isEmpty ? null : '+237$digits';
+  }
+
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
-
-    // TODO: re-enable `_formKey.currentState?.validate()` gating once the
-    // real payment gateway exists — skipped for now so every screen stays
-    // reachable while there's nothing to submit to.
+    if (!(_formKey.currentState?.validate() ?? false)) return;
 
     setState(() => _isSubmitting = true);
-
-    // TODO: charge the selected method via the real payment gateway and
-    // activate the account once it confirms.
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-
-    setState(() => _isSubmitting = false);
-
-    if (widget.userRole == UserRole.driver) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(builder: (_) => const LocationPermissionScreen()),
+    try {
+      await PaymentApi.initiate(
+        method: _selectedMethod.wireName,
+        purpose: _plan.purpose,
+        amount: _plan.amount,
+        phoneNumber: _phoneNumberFor(_selectedMethod),
       );
-      return;
-    }
+      if (!mounted) return;
 
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(builder: (_) => const WorkshopOwnerMain()),
-    );
+      if (widget.userRole == UserRole.driver) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(builder: (_) => const LocationPermissionScreen()),
+        );
+        return;
+      }
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(builder: (_) => const WorkshopOwnerMain()),
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          content: Text(error.message),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
   void _goBack() {

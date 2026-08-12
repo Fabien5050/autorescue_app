@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../core/app_colors.dart';
+import '../core/location_service.dart';
 import '../models/workshop.dart';
-import '../widgets/stylized_map.dart';
+import '../services/workshop_api.dart';
 import '../widgets/workshop_cards.dart';
 import 'workshop_profile_screen.dart';
 
@@ -19,6 +21,16 @@ class WorkshopsListScreen extends StatefulWidget {
 class _WorkshopsListScreenState extends State<WorkshopsListScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
+  List<Workshop> _workshops = <Workshop>[];
+  double _myLatitude = LocationService.fallbackLatitude;
+  double _myLongitude = LocationService.fallbackLongitude;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   @override
   void dispose() {
@@ -26,10 +38,25 @@ class _WorkshopsListScreenState extends State<WorkshopsListScreen> {
     super.dispose();
   }
 
+  Future<void> _load() async {
+    final (double, double) latLng = await LocationService.getCurrentLatLngOrFallback();
+    _myLatitude = latLng.$1;
+    _myLongitude = latLng.$2;
+    final List<Workshop> workshops = await WorkshopApi.listNearby(
+      latitude: _myLatitude,
+      longitude: _myLongitude,
+    );
+    if (!mounted) return;
+    setState(() {
+      _workshops = workshops;
+      _loading = false;
+    });
+  }
+
   List<Workshop> get _results {
-    if (_query.trim().isEmpty) return sampleWorkshops;
+    if (_query.trim().isEmpty) return _workshops;
     final String q = _query.trim().toLowerCase();
-    return sampleWorkshops.where((Workshop w) {
+    return _workshops.where((Workshop w) {
       return w.name.toLowerCase().contains(q) ||
           w.town.toLowerCase().contains(q) ||
           w.services.any((String s) => s.toLowerCase().contains(q));
@@ -121,7 +148,12 @@ class _WorkshopsListScreenState extends State<WorkshopsListScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  if (results.isEmpty)
+                  if (_loading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (results.isEmpty)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 24),
                       child: Text(
@@ -139,7 +171,12 @@ class _WorkshopsListScreenState extends State<WorkshopsListScreen> {
                       const SizedBox(height: 12),
                     ],
                   const SizedBox(height: 8),
-                  _CoverageAreaCard(onViewMap: widget.onViewMap),
+                  _CoverageAreaCard(
+                    workshops: _workshops,
+                    centerLatitude: _myLatitude,
+                    centerLongitude: _myLongitude,
+                    onViewMap: widget.onViewMap,
+                  ),
                 ],
               ),
             ),
@@ -151,8 +188,16 @@ class _WorkshopsListScreenState extends State<WorkshopsListScreen> {
 }
 
 class _CoverageAreaCard extends StatelessWidget {
-  const _CoverageAreaCard({required this.onViewMap});
+  const _CoverageAreaCard({
+    required this.workshops,
+    required this.centerLatitude,
+    required this.centerLongitude,
+    required this.onViewMap,
+  });
 
+  final List<Workshop> workshops;
+  final double centerLatitude;
+  final double centerLongitude;
   final VoidCallback onViewMap;
 
   @override
@@ -190,12 +235,33 @@ class _CoverageAreaCard extends StatelessWidget {
           Stack(
             alignment: Alignment.bottomCenter,
             children: <Widget>[
-              StylizedMap(
-                height: 130,
-                pins: <MapPin>[
-                  for (final Workshop w in sampleWorkshops)
-                    MapPin(alignment: w.pinAlignment, size: 18, color: AppColors.navy),
-                ],
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  height: 130,
+                  width: double.infinity,
+                  child: IgnorePointer(
+                    child: GoogleMap(
+                      initialCameraPosition: CameraPosition(
+                        target: LatLng(centerLatitude, centerLongitude),
+                        zoom: 11,
+                      ),
+                      zoomControlsEnabled: false,
+                      scrollGesturesEnabled: false,
+                      zoomGesturesEnabled: false,
+                      rotateGesturesEnabled: false,
+                      tiltGesturesEnabled: false,
+                      markers: <Marker>{
+                        for (final Workshop w in workshops)
+                          if (w.latitude != null && w.longitude != null)
+                            Marker(
+                              markerId: MarkerId('coverage-${w.id}'),
+                              position: LatLng(w.latitude!, w.longitude!),
+                            ),
+                      },
+                    ),
+                  ),
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../core/api_client.dart';
 import '../../core/app_colors.dart';
 import '../../models/day_hours.dart';
 import '../../models/workshop_owner_profile.dart';
 import '../../models/workshop_photo.dart';
 import '../../models/workshop_service.dart';
+import '../../services/workshop_api.dart';
 import '../../widgets/availability_status_pill.dart';
 import '../../widgets/photo_grid_tile.dart';
 import '../../widgets/rating_badge.dart';
@@ -26,6 +28,13 @@ class _WorkshopOwnerProfileScreenState extends State<WorkshopOwnerProfileScreen>
 
   Future<void> _editProfile() async {
     await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const EditWorkshopScreen()));
+    if (!mounted) return;
+    try {
+      await WorkshopApi.refreshMyProfile();
+    } on ApiException {
+      // Edit screen already refreshed the shared profile on save; a failed
+      // re-fetch here just means we show what's already in memory.
+    }
     if (mounted) setState(() {});
   }
 

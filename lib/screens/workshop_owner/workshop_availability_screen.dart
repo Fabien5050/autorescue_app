@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../core/api_client.dart';
 import '../../core/app_colors.dart';
 import '../../models/workshop_availability_status.dart';
 import '../../models/workshop_owner_profile.dart';
+import '../../services/workshop_api.dart';
 import '../../widgets/availability_status_pill.dart';
 
 /// Dedicated "Workshop Availability" screen — a focused view of the same
@@ -16,6 +18,25 @@ class WorkshopAvailabilityScreen extends StatefulWidget {
 
 class _WorkshopAvailabilityScreenState extends State<WorkshopAvailabilityScreen> {
   final WorkshopOwnerProfile _profile = demoWorkshopOwnerProfile;
+
+  Future<void> _apply({
+    required WorkshopAvailabilityStatus status,
+    required bool activeForRequests,
+  }) async {
+    try {
+      await WorkshopApi.updateAvailability(status: status, activeForRequests: activeForRequests);
+      if (mounted) setState(() {});
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          content: Text(error.message),
+        ),
+      );
+    }
+  }
 
   String get _description {
     switch (_profile.availabilityStatus) {
@@ -74,11 +95,10 @@ class _WorkshopAvailabilityScreenState extends State<WorkshopAvailabilityScreen>
                       Switch(
                         value: _profile.activeForRequests,
                         activeTrackColor: AppColors.accentGreen,
-                        onChanged: (bool value) => setState(() {
-                          _profile.activeForRequests = value;
-                          _profile.availabilityStatus =
-                              value ? WorkshopAvailabilityStatus.available : WorkshopAvailabilityStatus.closed;
-                        }),
+                        onChanged: (bool value) => _apply(
+                          activeForRequests: value,
+                          status: value ? WorkshopAvailabilityStatus.available : WorkshopAvailabilityStatus.closed,
+                        ),
                       ),
                     ],
                   ),
@@ -95,10 +115,10 @@ class _WorkshopAvailabilityScreenState extends State<WorkshopAvailabilityScreen>
               _StatusOption(
                 status: status,
                 selected: _profile.availabilityStatus == status,
-                onTap: () => setState(() {
-                  _profile.availabilityStatus = status;
-                  _profile.activeForRequests = status == WorkshopAvailabilityStatus.available;
-                }),
+                onTap: () => _apply(
+                  status: status,
+                  activeForRequests: status == WorkshopAvailabilityStatus.available,
+                ),
               ),
               const SizedBox(height: 10),
             ],

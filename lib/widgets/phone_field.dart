@@ -2,6 +2,17 @@ import 'package:flutter/material.dart';
 
 import '../core/app_colors.dart';
 
+/// Flag emoji for the dialing codes offered across the app's phone fields.
+/// Cameroon is the app's home market, so +237 is always listed first by
+/// callers; this map just supplies the matching flag for display.
+const Map<String, String> _countryFlags = <String, String>{
+  '+237': '🇨🇲',
+  '+1': '🇺🇸',
+  '+44': '🇬🇧',
+  '+33': '🇫🇷',
+  '+234': '🇳🇬',
+};
+
 /// Country-code dropdown fused with the phone number input, both inside a
 /// single bordered box.
 class PhoneField extends StatelessWidget {
@@ -55,11 +66,18 @@ class PhoneField extends StatelessWidget {
                         fontSize: 15,
                         color: AppColors.navy,
                       ),
+                      selectedItemBuilder: (BuildContext context) => <Widget>[
+                        for (final String code in countryCodes)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text('${_countryFlags[code] ?? ''} $code'.trim()),
+                          ),
+                      ],
                       items: <DropdownMenuItem<String>>[
                         for (final String code in countryCodes)
                           DropdownMenuItem<String>(
                             value: code,
-                            child: Text(code),
+                            child: Text('${_countryFlags[code] ?? ''} $code'.trim()),
                           ),
                       ],
                     ),

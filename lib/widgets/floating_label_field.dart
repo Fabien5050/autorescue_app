@@ -22,6 +22,7 @@ class FloatingLabelField extends StatelessWidget {
     this.autofillHints,
     this.accentColor = AppColors.burntOrange,
     this.textCapitalization = TextCapitalization.none,
+    this.enabled = true,
   });
 
   final String? label;
@@ -40,6 +41,7 @@ class FloatingLabelField extends StatelessWidget {
   /// burnt-orange used by the driver/workshop registration forms.
   final Color accentColor;
   final TextCapitalization textCapitalization;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -52,6 +54,7 @@ class FloatingLabelField extends StatelessWidget {
       controller: controller,
       validator: validator,
       obscureText: obscureText,
+      enabled: enabled,
       keyboardType: keyboardType,
       textInputAction: textInputAction,
       textCapitalization: textCapitalization,

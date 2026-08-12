@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../core/api_client.dart';
 import '../../core/app_colors.dart';
 import '../../models/workshop_owner_profile.dart';
 import '../../models/workshop_service.dart';
+import '../../services/workshop_api.dart';
 import '../../widgets/service_management_card.dart';
 
 /// "Services Offered" management screen: list, toggle, edit, delete, and
@@ -16,6 +18,17 @@ class WorkshopServicesScreen extends StatefulWidget {
 
 class _WorkshopServicesScreenState extends State<WorkshopServicesScreen> {
   List<WorkshopService> get _services => demoWorkshopOwnerProfile.services;
+
+  void _showError(Object error) {
+    final String message = error is ApiException ? error.message : 'Something went wrong';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFFDC2626),
+        behavior: SnackBarBehavior.floating,
+        content: Text(message),
+      ),
+    );
+  }
 
   Future<void> _addService() async {
     final Set<String> existingNames = _services.map((WorkshopService s) => s.name).toSet();
@@ -63,13 +76,15 @@ class _WorkshopServicesScreenState extends State<WorkshopServicesScreen> {
     );
     if (picked == null || !mounted) return;
 
-    setState(() {
-      _services.add(WorkshopService(
+    try {
+      final WorkshopService created = await WorkshopApi.addService(
         name: picked.$1,
         description: 'Service offered by this workshop.',
-        icon: picked.$2,
-      ));
-    });
+      );
+      if (mounted) setState(() => _services.add(created));
+    } on ApiException catch (error) {
+      if (mounted) _showError(error);
+    }
   }
 
   Future<void> _editService(WorkshopService service) async {
@@ -107,27 +122,56 @@ class _WorkshopServicesScreenState extends State<WorkshopServicesScreen> {
     );
 
     if (saved != true || !mounted) return;
-    setState(() {
-      service.description = descriptionController.text.trim().isEmpty
-          ? service.description
-          : descriptionController.text.trim();
-      service.price = priceController.text.trim().isEmpty ? null : priceController.text.trim();
-    });
+
+    final String newDescription = descriptionController.text.trim().isEmpty
+        ? service.description
+        : descriptionController.text.trim();
+    final String? newPrice = priceController.text.trim().isEmpty ? null : priceController.text.trim();
+
+    try {
+      final WorkshopService updated = await WorkshopApi.updateService(
+        serviceId: service.id!,
+        name: service.name,
+        description: newDescription,
+        price: newPrice,
+        available: service.available,
+      );
+      if (!mounted) return;
+      setState(() {
+        final int index = _services.indexOf(service);
+        if (index != -1) _services[index] = updated;
+      });
+    } on ApiException catch (error) {
+      if (mounted) _showError(error);
+    }
   }
 
-  void _deleteService(WorkshopService service) {
-    final int index = _services.indexOf(service);
-    setState(() => _services.remove(service));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text('${service.name} removed'),
-        action: SnackBarAction(
-          label: 'Undo',
-          onPressed: () => setState(() => _services.insert(index.clamp(0, _services.length), service)),
-        ),
-      ),
-    );
+  Future<void> _setAvailable(WorkshopService service, bool value) async {
+    try {
+      final WorkshopService updated = await WorkshopApi.updateService(
+        serviceId: service.id!,
+        name: service.name,
+        description: service.description,
+        price: service.price,
+        available: value,
+      );
+      if (!mounted) return;
+      setState(() {
+        final int index = _services.indexOf(service);
+        if (index != -1) _services[index] = updated;
+      });
+    } on ApiException catch (error) {
+      if (mounted) _showError(error);
+    }
+  }
+
+  Future<void> _deleteService(WorkshopService service) async {
+    try {
+      await WorkshopApi.deleteService(service.id!);
+      if (mounted) setState(() => _services.remove(service));
+    } on ApiException catch (error) {
+      if (mounted) _showError(error);
+    }
   }
 
   @override
@@ -171,7 +215,7 @@ class _WorkshopServicesScreenState extends State<WorkshopServicesScreen> {
                         final WorkshopService service = _services[index];
                         return ServiceManagementCard(
                           service: service,
-                          onAvailabilityChanged: (bool value) => setState(() => service.available = value),
+                          onAvailabilityChanged: (bool value) => _setAvailable(service, value),
                           onEdit: () => _editService(service),
                           onDelete: () => _deleteService(service),
                         );

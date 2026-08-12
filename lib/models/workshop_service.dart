@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 /// A single service offered by a workshop, as managed on the owner side.
 class WorkshopService {
   WorkshopService({
+    this.id,
     required this.name,
     required this.description,
     required this.icon,
@@ -10,11 +11,32 @@ class WorkshopService {
     this.available = true,
   });
 
+  /// Backend service id — null until this service has been saved.
+  int? id;
   final String name;
   String description;
   final IconData icon;
   String? price;
   bool available;
+
+  factory WorkshopService.fromJson(Map<String, dynamic> json) {
+    final String name = json['name'] as String;
+    return WorkshopService(
+      id: json['id'] as int?,
+      name: name,
+      description: (json['description'] as String?) ?? '',
+      icon: _iconForServiceName(name),
+      price: json['price'] as String?,
+      available: json['available'] as bool? ?? true,
+    );
+  }
+}
+
+IconData _iconForServiceName(String name) {
+  for (final (String catalogueName, IconData icon) in workshopServiceCatalogue) {
+    if (catalogueName == name) return icon;
+  }
+  return Icons.build_outlined;
 }
 
 /// Starter demo services for "Buea Demo Auto Workshop".

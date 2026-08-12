@@ -4,4 +4,9 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Debug-only: allows plain-HTTP calls to the local backend at
+         10.0.2.2 (Android's alias for the host machine). Android 9+ blocks
+         cleartext traffic by default; release builds stay strict. -->
+    <application android:usesCleartextTraffic="true"/>
 </manifest>

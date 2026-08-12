@@ -10,6 +10,7 @@ import 'workshop_service.dart';
 /// is persisted or synced to a backend yet.
 class WorkshopOwnerProfile {
   WorkshopOwnerProfile({
+    this.id,
     required this.name,
     required this.ownerName,
     required this.description,
@@ -31,6 +32,7 @@ class WorkshopOwnerProfile {
     required this.photos,
   });
 
+  int? id;
   String name;
   String ownerName;
   String description;
@@ -50,6 +52,47 @@ class WorkshopOwnerProfile {
   List<DayHours> operatingHours;
   bool open24Hours;
   List<WorkshopPhotoItem> photos;
+
+  /// Overwrites every field in place from a `GET /api/workshops/me`
+  /// response, so every screen already holding a reference to this
+  /// singleton sees the refreshed data without re-fetching themselves.
+  /// [ownerEmail] comes from the session, not the workshop response —
+  /// there's no backend field/endpoint for editing it.
+  void applyFromJson(Map<String, dynamic> json, {required String ownerEmail}) {
+    id = json['id'] as int;
+    name = json['name'] as String;
+    ownerName = (json['ownerName'] as String?) ?? ownerName;
+    description = (json['description'] as String?) ?? '';
+    phone = (json['phone'] as String?) ?? '';
+    whatsapp = (json['whatsapp'] as String?) ?? '';
+    emergencyContact = (json['emergencyContact'] as String?) ?? '';
+    email = ownerEmail;
+    address = (json['address'] as String?) ?? '';
+    latitude = (json['latitude'] as num?)?.toDouble() ?? 0;
+    longitude = (json['longitude'] as num?)?.toDouble() ?? 0;
+    rating = (json['rating'] as num?)?.toDouble() ?? 0;
+    reviewCount = json['reviewCount'] as int? ?? 0;
+    isVerified = json['verificationStatus'] == 'APPROVED';
+    availabilityStatus = WorkshopAvailabilityStatus.values.firstWhere(
+      (WorkshopAvailabilityStatus s) =>
+          s.name.toUpperCase() == json['availabilityStatus'],
+      orElse: () => WorkshopAvailabilityStatus.closed,
+    );
+    activeForRequests = json['activeForRequests'] as bool? ?? false;
+    open24Hours = json['open24Hours'] as bool? ?? false;
+    services = (json['services'] as List<dynamic>? ?? <dynamic>[])
+        .map((dynamic e) => WorkshopService.fromJson(e as Map<String, dynamic>))
+        .toList();
+    operatingHours = DayHours.listFromJson(json['operatingHours'] as List<dynamic>? ?? <dynamic>[]);
+    photos = (json['photos'] as List<dynamic>? ?? <dynamic>[])
+        .map((dynamic e) => WorkshopPhotoItem.fromJson(e as Map<String, dynamic>))
+        .toList();
+    for (final String category in defaultPhotoCategories) {
+      if (!photos.any((WorkshopPhotoItem p) => p.category == category)) {
+        photos.add(WorkshopPhotoItem(category: category));
+      }
+    }
+  }
 }
 
 /// Singleton demo profile shared by every workshop-owner screen in this

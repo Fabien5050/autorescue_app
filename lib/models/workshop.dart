@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'dart:math' as math;
 
 /// A certified workshop as shown across the driver dashboard's map, list,
 /// profile, and SOS screens.
@@ -11,11 +11,17 @@ class Workshop {
     required this.services,
     required this.isOpenNow,
     required this.phone,
-    required this.pinAlignment,
+    this.id,
+    this.latitude,
+    this.longitude,
     this.reviewCount,
     this.address,
     this.openingHours,
   });
+
+  /// Backend workshop id — populated when built from a real
+  /// `GET /api/workshops` response.
+  final int? id;
 
   final String name;
   final String town;
@@ -25,8 +31,10 @@ class Workshop {
   final bool isOpenNow;
   final String phone;
 
-  /// Where this workshop's pin sits on the stylized map surfaces.
-  final Alignment pinAlignment;
+  /// Null only if the backend hasn't had a location set for this workshop
+  /// yet — real workshops always have one once registered.
+  final double? latitude;
+  final double? longitude;
 
   final int? reviewCount;
   final String? address;
@@ -35,95 +43,50 @@ class Workshop {
   String get distanceLabel => distanceKm < 1
       ? '${(distanceKm * 1000).round()}m away'
       : '${distanceKm.toStringAsFixed(1)}km away';
+
+  /// Builds a [Workshop] from a `WorkshopResponse` JSON body, computing
+  /// distance client-side (the backend doesn't return one) via the
+  /// haversine formula against the caller's current coordinates.
+  factory Workshop.fromJson(
+    Map<String, dynamic> json, {
+    required double fromLatitude,
+    required double fromLongitude,
+  }) {
+    final double? lat = (json['latitude'] as num?)?.toDouble();
+    final double? lng = (json['longitude'] as num?)?.toDouble();
+    return Workshop(
+      id: json['id'] as int,
+      name: json['name'] as String,
+      town: (json['address'] as String?) ?? '',
+      distanceKm: lat == null || lng == null
+          ? 0
+          : _haversineKm(fromLatitude, fromLongitude, lat, lng),
+      latitude: lat,
+      longitude: lng,
+      rating: (json['rating'] as num?)?.toDouble() ?? 0,
+      reviewCount: json['reviewCount'] as int?,
+      services: (json['services'] as List<dynamic>? ?? <dynamic>[])
+          .map((dynamic e) => (e as Map<String, dynamic>)['name'] as String)
+          .toList(),
+      isOpenNow: json['availabilityStatus'] == 'AVAILABLE',
+      phone: (json['phone'] as String?) ?? '',
+      address: json['address'] as String?,
+    );
+  }
 }
 
-const List<Workshop> sampleWorkshops = <Workshop>[
-  Workshop(
-    name: 'Buea Central Mechanics',
-    town: 'Buea',
-    distanceKm: 0.5,
-    rating: 4.8,
-    reviewCount: 124,
-    services: <String>['Tire Service', 'Battery Jump', 'Oil Change', 'Brake Repair', 'Diagnostics'],
-    isOpenNow: true,
-    phone: '+237670000001',
-    pinAlignment: Alignment(-0.3, -0.2),
-    address: 'Molyko, Opposite University, Buea, South-West Cameroon',
-    openingHours: 'Mon - Fri: 08:00 - 18:00\nSaturday: 09:00 - 15:00',
-  ),
-  Workshop(
-    name: 'Mount Fako Mechanics',
-    town: 'Buea',
-    distanceKm: 1.2,
-    rating: 4.5,
-    services: <String>['Engine', 'Suspension'],
-    isOpenNow: true,
-    phone: '+237670000002',
-    pinAlignment: Alignment(0.4, 0.1),
-  ),
-  Workshop(
-    name: 'Molyko Quick Fix',
-    town: 'Buea',
-    distanceKm: 0.8,
-    rating: 4.8,
-    services: <String>['Engine', 'Tires', 'Brakes'],
-    isOpenNow: true,
-    phone: '+237670000003',
-    pinAlignment: Alignment(-0.1, 0.35),
-  ),
-  Workshop(
-    name: 'Limbe Central Garage',
-    town: 'Limbe',
-    distanceKm: 2.4,
-    rating: 4.5,
-    services: <String>['Electrical', 'AC Repair', 'Battery'],
-    isOpenNow: false,
-    phone: '+237670000004',
-    pinAlignment: Alignment(0.7, -0.4),
-  ),
-  Workshop(
-    name: 'Kumba Expert Auto',
-    town: 'Kumba',
-    distanceKm: 5.1,
-    rating: 4.2,
-    services: <String>['Bodywork', 'Paint'],
-    isOpenNow: true,
-    phone: '+237670000005',
-    pinAlignment: Alignment(-0.7, 0.5),
-  ),
-];
+double _haversineKm(double lat1, double lon1, double lat2, double lon2) {
+  const double earthRadiusKm = 6371;
+  final double dLat = _degToRad(lat2 - lat1);
+  final double dLon = _degToRad(lon2 - lon1);
+  final double a =
+      math.sin(dLat / 2) * math.sin(dLat / 2) +
+      math.cos(_degToRad(lat1)) *
+          math.cos(_degToRad(lat2)) *
+          math.sin(dLon / 2) *
+          math.sin(dLon / 2);
+  final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+  return earthRadiusKm * c;
+}
 
-/// Nearest-to-you list used by the Emergency SOS screen — a different cut
-/// of the same directory, ranked purely by distance.
-const List<Workshop> emergencyNearestWorkshops = <Workshop>[
-  Workshop(
-    name: "Musa's Auto Repair",
-    town: 'Buea',
-    distanceKm: 0.8,
-    rating: 4.6,
-    services: <String>['Towing', 'Engine'],
-    isOpenNow: true,
-    phone: '+237670000006',
-    pinAlignment: Alignment(-0.2, -0.1),
-  ),
-  Workshop(
-    name: 'Kumba Road Rescue',
-    town: 'Kumba',
-    distanceKm: 1.5,
-    rating: 4.3,
-    services: <String>['Towing'],
-    isOpenNow: true,
-    phone: '+237670000007',
-    pinAlignment: Alignment(0.3, 0.2),
-  ),
-  Workshop(
-    name: 'Limbe Central Garage',
-    town: 'Limbe',
-    distanceKm: 3.2,
-    rating: 4.5,
-    services: <String>['Electrical', 'Battery'],
-    isOpenNow: true,
-    phone: '+237670000004',
-    pinAlignment: Alignment(0.6, -0.3),
-  ),
-];
+double _degToRad(double deg) => deg * (math.pi / 180);

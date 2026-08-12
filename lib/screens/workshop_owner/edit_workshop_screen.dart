@@ -3,11 +3,13 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../core/api_client.dart';
 import '../../core/app_colors.dart';
 import '../../models/day_hours.dart';
 import '../../models/workshop_owner_profile.dart';
 import '../../models/workshop_photo.dart';
 import '../../models/workshop_service.dart';
+import '../../services/workshop_api.dart';
 import '../../widgets/floating_label_field.dart';
 import '../../widgets/map_location_preview.dart';
 import '../../widgets/photo_grid_tile.dart';
@@ -45,6 +47,18 @@ class _EditWorkshopScreenState extends State<EditWorkshopScreen> {
   late double _longitude = _profile.longitude;
   late final Set<String> _selectedServices =
       _profile.services.map((WorkshopService s) => s.name).toSet();
+  bool _isSaving = false;
+
+  void _showError(Object error) {
+    final String message = error is ApiException ? error.message : 'Something went wrong';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFFDC2626),
+        behavior: SnackBarBehavior.floating,
+        content: Text(message),
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -113,56 +127,112 @@ class _EditWorkshopScreenState extends State<EditWorkshopScreen> {
     );
   }
 
-  Future<void> _fillPhotoSlot(WorkshopPhotoItem photo) async {
+  Future<void> _uploadPhoto(String category, {WorkshopPhotoItem? replacing}) async {
     final ImageSource? source = await _chooseImageSource();
     if (source == null || !mounted) return;
     final XFile? picked = await _imagePicker.pickImage(source: source, imageQuality: 85);
     if (picked == null || !mounted) return;
     final Uint8List bytes = await picked.readAsBytes();
     if (!mounted) return;
-    setState(() => photo.bytes = bytes);
+
+    try {
+      if (replacing?.id != null) {
+        await WorkshopApi.deletePhoto(replacing!.id!);
+      }
+      final WorkshopPhotoItem uploaded = await WorkshopApi.addPhoto(
+        category: category,
+        fileBytes: bytes,
+        fileName: picked.name,
+      )
+        ..bytes = bytes;
+      if (!mounted) return;
+      setState(() {
+        if (replacing != null) {
+          final int index = _profile.photos.indexOf(replacing);
+          if (index != -1) _profile.photos[index] = uploaded;
+        } else {
+          _profile.photos.add(uploaded);
+        }
+      });
+    } on ApiException catch (error) {
+      if (mounted) _showError(error);
+    }
   }
 
-  Future<void> _addPhoto() async {
-    final ImageSource? source = await _chooseImageSource();
-    if (source == null || !mounted) return;
-    final XFile? picked = await _imagePicker.pickImage(source: source, imageQuality: 85);
-    if (picked == null || !mounted) return;
-    final Uint8List bytes = await picked.readAsBytes();
-    if (!mounted) return;
-    setState(() => _profile.photos.add(WorkshopPhotoItem(category: 'Other', bytes: bytes)));
+  Future<void> _fillPhotoSlot(WorkshopPhotoItem photo) => _uploadPhoto(photo.category, replacing: photo);
+
+  Future<void> _addPhoto() => _uploadPhoto('Other');
+
+  Future<void> _deletePhoto(WorkshopPhotoItem photo) async {
+    if (photo.id == null) return;
+    try {
+      await WorkshopApi.deletePhoto(photo.id!);
+      if (!mounted) return;
+      setState(() {
+        if (defaultPhotoCategories.contains(photo.category)) {
+          photo
+            ..bytes = null
+            ..id = null
+            ..photoUrl = null;
+        } else {
+          _profile.photos.remove(photo);
+        }
+      });
+    } on ApiException catch (error) {
+      if (mounted) _showError(error);
+    }
   }
 
-  void _save() {
-    setState(() {
-      _profile.name = _nameController.text.trim().isEmpty ? _profile.name : _nameController.text.trim();
-      _profile.ownerName = _ownerController.text.trim().isEmpty ? _profile.ownerName : _ownerController.text.trim();
-      _profile.phone = _phoneController.text.trim();
-      _profile.email = _emailController.text.trim();
-      _profile.description = _descriptionController.text.trim();
-      _profile.whatsapp = _whatsappController.text.trim();
-      _profile.emergencyContact = _emergencyController.text.trim();
-      _profile.address = _addressController.text.trim();
-      _profile.latitude = _latitude;
-      _profile.longitude = _longitude;
-      _profile.services = <WorkshopService>[
-        for (final WorkshopService existing in _profile.services)
-          if (_selectedServices.contains(existing.name)) existing,
-        for (final (String name, IconData icon) in workshopServiceCatalogue)
-          if (_selectedServices.contains(name) &&
-              !_profile.services.any((WorkshopService s) => s.name == name))
-            WorkshopService(name: name, description: 'Service offered by this workshop.', icon: icon),
-      ];
-    });
+  Future<void> _save() async {
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
+    try {
+      // Mutate `_profile.services` immediately after each call succeeds
+      // (rather than only after the whole save completes) — if a later
+      // step in this method throws and the user retries, the diff below
+      // must see what's already been created/deleted, or a retry
+      // re-creates services that already exist on the backend.
+      for (final WorkshopService existing in List<WorkshopService>.of(_profile.services)) {
+        if (!_selectedServices.contains(existing.name)) {
+          await WorkshopApi.deleteService(existing.id!);
+          _profile.services.remove(existing);
+        }
+      }
+      final Set<String> existingNames = _profile.services.map((WorkshopService s) => s.name).toSet();
+      for (final String name in _selectedServices) {
+        if (!existingNames.contains(name)) {
+          final WorkshopService created =
+              await WorkshopApi.addService(name: name, description: 'Service offered by this workshop.');
+          _profile.services.add(created);
+        }
+      }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.accentGreen,
-        content: Text('Workshop profile updated successfully.'),
-      ),
-    );
-    Navigator.of(context).pop();
+      await WorkshopApi.updateProfile(
+        name: _nameController.text.trim().isEmpty ? _profile.name : _nameController.text.trim(),
+        description: _descriptionController.text.trim(),
+        phone: _phoneController.text.trim(),
+        whatsapp: _whatsappController.text.trim(),
+        emergencyContact: _emergencyController.text.trim(),
+        address: _addressController.text.trim(),
+        latitude: _latitude,
+        longitude: _longitude,
+        open24Hours: _profile.open24Hours,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.accentGreen,
+          content: Text('Workshop profile updated successfully.'),
+        ),
+      );
+      Navigator.of(context).pop();
+    } on ApiException catch (error) {
+      if (mounted) _showError(error);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -187,7 +257,12 @@ class _EditWorkshopScreenState extends State<EditWorkshopScreen> {
                 iconColor: AppColors.primaryBlue,
                 children: <Widget>[
                   FloatingLabelField(label: 'Workshop Name', controller: _nameController, accentColor: AppColors.primaryBlue),
-                  FloatingLabelField(label: 'Owner Name', controller: _ownerController, accentColor: AppColors.primaryBlue),
+                  FloatingLabelField(
+                    label: 'Owner Name',
+                    controller: _ownerController,
+                    accentColor: AppColors.primaryBlue,
+                    enabled: false,
+                  ),
                   FloatingLabelField(
                     label: 'Phone Number',
                     controller: _phoneController,
@@ -199,6 +274,7 @@ class _EditWorkshopScreenState extends State<EditWorkshopScreen> {
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     accentColor: AppColors.primaryBlue,
+                    enabled: false,
                   ),
                   FloatingLabelField(
                     label: 'Description',
@@ -323,7 +399,7 @@ class _EditWorkshopScreenState extends State<EditWorkshopScreen> {
                         PhotoGridTile(
                           photo: photo,
                           onTap: () => _fillPhotoSlot(photo),
-                          onDelete: () => setState(() => photo.bytes = null),
+                          onDelete: () => _deletePhoto(photo),
                         ),
                       AddPhotoTile(onTap: _addPhoto),
                     ],
@@ -339,7 +415,11 @@ class _EditWorkshopScreenState extends State<EditWorkshopScreen> {
                 ],
               ),
               const SizedBox(height: 22),
-              PrimaryButton(label: 'Save Workshop Profile', trailingIcon: null, onPressed: _save),
+              PrimaryButton(
+                label: _isSaving ? 'Saving…' : 'Save Workshop Profile',
+                trailingIcon: null,
+                onPressed: _isSaving ? null : _save,
+              ),
             ],
           ),
         ),

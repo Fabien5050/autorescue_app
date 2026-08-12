@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../core/app_colors.dart';
+import '../core/location_service.dart';
 import '../models/workshop.dart';
-import '../widgets/stylized_map.dart';
+import '../services/workshop_api.dart';
 import '../widgets/workshop_cards.dart';
 import 'workshop_profile_screen.dart';
 
@@ -25,18 +27,63 @@ class DriverHomeMapScreen extends StatefulWidget {
 
 class _DriverHomeMapScreenState extends State<DriverHomeMapScreen> {
   String _activeFilter = _filterCategories.first;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+  List<Workshop> _workshops = <Workshop>[];
+  double _myLatitude = LocationService.fallbackLatitude;
+  double _myLongitude = LocationService.fallbackLongitude;
+  bool _hasRealLocation = false;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final position = await LocationService.getCurrentPosition();
+    _hasRealLocation = position != null;
+    _myLatitude = position?.latitude ?? LocationService.fallbackLatitude;
+    _myLongitude = position?.longitude ?? LocationService.fallbackLongitude;
+
+    final List<Workshop> workshops = await WorkshopApi.listNearby(
+      latitude: _myLatitude,
+      longitude: _myLongitude,
+    );
+    if (!mounted) return;
+    setState(() {
+      _workshops = workshops;
+      _loading = false;
+    });
+  }
 
   List<Workshop> get _filteredWorkshops {
+    List<Workshop> result;
     if (_activeFilter == 'Nearby') {
-      final List<Workshop> sorted = List<Workshop>.of(sampleWorkshops);
-      sorted.sort((Workshop a, Workshop b) => a.distanceKm.compareTo(b.distanceKm));
-      return sorted;
+      result = List<Workshop>.of(_workshops)
+        ..sort((Workshop a, Workshop b) => a.distanceKm.compareTo(b.distanceKm));
+    } else {
+      result = _workshops
+          .where((Workshop w) => w.services.any(
+                (String s) => s.toLowerCase().contains(_activeFilter.toLowerCase()),
+              ))
+          .toList();
     }
-    return sampleWorkshops
-        .where((Workshop w) => w.services.any(
-              (String s) => s.toLowerCase().contains(_activeFilter.toLowerCase()),
-            ))
-        .toList();
+
+    final String query = _searchQuery.trim().toLowerCase();
+    if (query.isEmpty) return result;
+    return result.where((Workshop w) {
+      return w.name.toLowerCase().contains(query) ||
+          w.town.toLowerCase().contains(query) ||
+          w.services.any((String s) => s.toLowerCase().contains(query));
+    }).toList();
   }
 
   void _openWorkshop(Workshop workshop) {
@@ -54,20 +101,27 @@ class _DriverHomeMapScreenState extends State<DriverHomeMapScreen> {
       body: Stack(
         children: <Widget>[
           Positioned.fill(
-            child: StylizedMap(
-              borderRadius: 0,
-              height: double.infinity,
-              pins: <MapPin>[
-                const MapPin(alignment: Alignment(0, -0.7), pulsing: true),
-                for (final Workshop w in sampleWorkshops)
-                  MapPin(
-                    alignment: w.pinAlignment,
-                    color: AppColors.navy,
-                    icon: Icons.storefront,
-                    size: 22,
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : GoogleMap(
+                    initialCameraPosition: CameraPosition(
+                      target: LatLng(_myLatitude, _myLongitude),
+                      zoom: 13.5,
+                    ),
+                    myLocationEnabled: _hasRealLocation,
+                    myLocationButtonEnabled: false,
+                    zoomControlsEnabled: false,
+                    markers: <Marker>{
+                      for (final Workshop w in workshops)
+                        if (w.latitude != null && w.longitude != null)
+                          Marker(
+                            markerId: MarkerId('workshop-${w.id}'),
+                            position: LatLng(w.latitude!, w.longitude!),
+                            infoWindow: InfoWindow(title: w.name, snippet: w.distanceLabel),
+                            onTap: () => _openWorkshop(w),
+                          ),
+                    },
                   ),
-              ],
-            ),
           ),
           SafeArea(
             bottom: false,
@@ -75,7 +129,10 @@ class _DriverHomeMapScreenState extends State<DriverHomeMapScreen> {
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
               child: Column(
                 children: <Widget>[
-                  _SearchBar(),
+                  _SearchBar(
+                    controller: _searchController,
+                    onChanged: (String value) => setState(() => _searchQuery = value),
+                  ),
                   const SizedBox(height: 10),
                   SizedBox(
                     height: 34,
@@ -118,7 +175,10 @@ class _DriverHomeMapScreenState extends State<DriverHomeMapScreen> {
 }
 
 class _SearchBar extends StatelessWidget {
-  const _SearchBar();
+  const _SearchBar({required this.controller, required this.onChanged});
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -140,13 +200,29 @@ class _SearchBar extends StatelessWidget {
         children: <Widget>[
           const Icon(Icons.search, size: 19, color: AppColors.slateLight),
           const SizedBox(width: 10),
-          const Expanded(
-            child: Text(
-              'Search for workshop...',
-              style: TextStyle(fontSize: 13.5, color: AppColors.slateLight),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              onChanged: onChanged,
+              style: const TextStyle(fontSize: 13.5, color: AppColors.heading),
+              decoration: const InputDecoration(
+                hintText: 'Search for workshop...',
+                hintStyle: TextStyle(fontSize: 13.5, color: AppColors.slateLight),
+                border: InputBorder.none,
+                isDense: true,
+              ),
             ),
           ),
-          const Icon(Icons.tune, size: 18, color: AppColors.primaryBlue),
+          if (controller.text.isNotEmpty)
+            InkWell(
+              onTap: () {
+                controller.clear();
+                onChanged('');
+              },
+              child: const Icon(Icons.close, size: 18, color: AppColors.slateLight),
+            )
+          else
+            const Icon(Icons.tune, size: 18, color: AppColors.primaryBlue),
         ],
       ),
     );

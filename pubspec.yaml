@@ -43,6 +43,19 @@ dependencies:
   # ID photo uploads.
   image_picker: ^1.1.2
 
+  # HTTP client for talking to the AutoRecue backend.
+  http: ^1.6.0
+
+  # Persists the session token across hot restarts.
+  shared_preferences: ^2.3.3
+
+  # Real device GPS.
+  geolocator: ^14.0.2
+
+  # Real Google Maps rendering, replacing the painted StylizedMap stand-ins.
+  google_maps_flutter: ^2.18.0
+  url_launcher: ^6.3.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

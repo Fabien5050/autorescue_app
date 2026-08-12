@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../core/app_colors.dart';
 import '../../widgets/primary_button.dart';
 
-/// Dedicated map picker screen. This paints a mock map — wiring a real one
-/// requires the `google_maps_flutter` package plus per-platform API keys,
-/// which this project doesn't have configured, and no fake key should be
-/// invented. The tap-to-place interaction and the returned (lat, lng) are
-/// built so a real map view can be dropped in later without touching the
-/// callers.
+/// Dedicated map picker screen — tap anywhere to move the workshop marker.
 class WorkshopLocationScreen extends StatefulWidget {
   const WorkshopLocationScreen({
     super.key,
@@ -28,16 +24,23 @@ class WorkshopLocationScreen extends StatefulWidget {
 class _WorkshopLocationScreenState extends State<WorkshopLocationScreen> {
   late double _latitude = widget.initialLatitude;
   late double _longitude = widget.initialLongitude;
-  Alignment _markerAlignment = Alignment.center;
+  GoogleMapController? _mapController;
 
-  void _moveMarker(Offset localPosition, Size size) {
-    final double dx = ((localPosition.dx / size.width) * 2 - 1).clamp(-1.0, 1.0);
-    final double dy = ((localPosition.dy / size.height) * 2 - 1).clamp(-1.0, 1.0);
+  void _moveMarker(LatLng position) {
     setState(() {
-      _markerAlignment = Alignment(dx, dy);
-      _latitude = widget.initialLatitude - dy * 0.01;
-      _longitude = widget.initialLongitude + dx * 0.01;
+      _latitude = position.latitude;
+      _longitude = position.longitude;
     });
+  }
+
+  void _resetToInitial() {
+    setState(() {
+      _latitude = widget.initialLatitude;
+      _longitude = widget.initialLongitude;
+    });
+    _mapController?.animateCamera(
+      CameraUpdate.newLatLng(LatLng(widget.initialLatitude, widget.initialLongitude)),
+    );
   }
 
   void _confirm() {
@@ -86,32 +89,32 @@ class _WorkshopLocationScreenState extends State<WorkshopLocationScreen> {
               ),
             ),
             Expanded(
-              child: LayoutBuilder(
-                builder: (BuildContext context, BoxConstraints constraints) {
-                  final Size size = Size(constraints.maxWidth, constraints.maxHeight);
-                  return GestureDetector(
-                    onTapUp: (TapUpDetails details) => _moveMarker(details.localPosition, size),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: <Widget>[
-                        CustomPaint(painter: _MapGridPainter()),
-                        const Align(
-                          alignment: Alignment.center,
-                          child: Icon(Icons.my_location, color: AppColors.secondaryCyan, size: 18),
-                        ),
-                        Align(
-                          alignment: _markerAlignment,
-                          child: const Icon(Icons.location_on, color: AppColors.dangerRed, size: 38),
-                        ),
-                        const Positioned(
-                          left: 12,
-                          top: 12,
-                          child: _MapHint(text: 'Tap the map to move the workshop marker'),
-                        ),
-                      ],
+              child: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  GoogleMap(
+                    initialCameraPosition: CameraPosition(
+                      target: LatLng(_latitude, _longitude),
+                      zoom: 16,
                     ),
-                  );
-                },
+                    onMapCreated: (GoogleMapController controller) => _mapController = controller,
+                    onTap: _moveMarker,
+                    zoomControlsEnabled: false,
+                    markers: <Marker>{
+                      Marker(
+                        markerId: const MarkerId('workshop-location'),
+                        position: LatLng(_latitude, _longitude),
+                        draggable: true,
+                        onDragEnd: _moveMarker,
+                      ),
+                    },
+                  ),
+                  const Positioned(
+                    left: 12,
+                    top: 12,
+                    child: _MapHint(text: 'Tap the map or drag the pin to move the workshop marker'),
+                  ),
+                ],
               ),
             ),
             Container(
@@ -145,11 +148,7 @@ class _WorkshopLocationScreenState extends State<WorkshopLocationScreen> {
                     children: <Widget>[
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () => setState(() {
-                            _markerAlignment = Alignment.center;
-                            _latitude = widget.initialLatitude;
-                            _longitude = widget.initialLongitude;
-                          }),
+                          onPressed: _resetToInitial,
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.primaryBlue,
                             side: const BorderSide(color: AppColors.primaryBlue),
@@ -214,26 +213,4 @@ class _CoordinateTile extends StatelessWidget {
       ),
     );
   }
-}
-
-class _MapGridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFFE7EEE7));
-
-    final Paint road = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 8;
-    canvas.drawLine(Offset(0, size.height * 0.35), Offset(size.width, size.height * 0.55), road);
-    canvas.drawLine(Offset(size.width * 0.3, 0), Offset(size.width * 0.55, size.height), road);
-    canvas.drawLine(Offset(0, size.height * 0.75), Offset(size.width, size.height * 0.68), road);
-
-    final Paint block = Paint()..color = const Color(0xFFD5E4D5);
-    canvas.drawRect(Rect.fromLTWH(size.width * 0.05, size.height * 0.08, size.width * 0.22, size.height * 0.16), block);
-    canvas.drawRect(Rect.fromLTWH(size.width * 0.68, size.height * 0.62, size.width * 0.25, size.height * 0.2), block);
-    canvas.drawRect(Rect.fromLTWH(size.width * 0.15, size.height * 0.55, size.width * 0.18, size.height * 0.14), block);
-  }
-
-  @override
-  bool shouldRepaint(covariant _MapGridPainter oldDelegate) => false;
 }

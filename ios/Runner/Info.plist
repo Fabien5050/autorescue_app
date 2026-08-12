@@ -30,6 +30,8 @@
 	<string>AutoRescue uses the camera to capture ID and verification photos during workshop registration.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>AutoRescue accesses your photo library so you can upload ID and business documents during registration.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>AutoRescue uses your location to show nearby workshops and to share your position during an emergency assistance request.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/app_colors.dart';
+import '../core/location_service.dart';
 import '../widgets/primary_button.dart';
 import 'driver_main_dashboard.dart';
 
@@ -25,8 +26,17 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen>
     super.dispose();
   }
 
-  void _continue() {
-    // Hook the real geolocation permission request in here.
+  bool _isRequesting = false;
+
+  Future<void> _allowLocation() async {
+    setState(() => _isRequesting = true);
+    await LocationService.getCurrentPosition();
+    if (!mounted) return;
+    setState(() => _isRequesting = false);
+    _goToDashboard();
+  }
+
+  void _goToDashboard() {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(builder: (_) => const DriverMainDashboard()),
     );
@@ -90,14 +100,14 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen>
               ),
               const Spacer(flex: 3),
               PrimaryButton(
-                label: 'Allow Location',
+                label: _isRequesting ? 'Requesting…' : 'Allow Location',
                 color: AppColors.primaryBlue,
                 trailingIcon: null,
-                onPressed: _continue,
+                onPressed: _isRequesting ? null : _allowLocation,
               ),
               const SizedBox(height: 10),
               TextButton(
-                onPressed: _continue,
+                onPressed: _isRequesting ? null : _goToDashboard,
                 child: const Text(
                   'Not Now',
                   style: TextStyle(

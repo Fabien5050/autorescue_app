@@ -20,7 +20,7 @@ class PhotoGridTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool hasImage = photo.bytes != null;
+    final bool hasImage = photo.bytes != null || photo.fullPhotoUrl != null;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(14),
@@ -33,8 +33,10 @@ class PhotoGridTile extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: <Widget>[
-                if (hasImage)
+                if (photo.bytes != null)
                   Image.memory(photo.bytes!, fit: BoxFit.cover)
+                else if (photo.fullPhotoUrl != null)
+                  Image.network(photo.fullPhotoUrl!, fit: BoxFit.cover)
                 else
                   DecoratedBox(
                     decoration: BoxDecoration(border: Border.all(color: AppColors.border)),

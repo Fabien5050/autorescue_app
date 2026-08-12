@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../core/app_colors.dart';
 
-/// Static map-style placeholder with a coordinate readout and a
-/// "set location" action.
-///
-/// This is a painted stand-in, not a real map — wiring an actual map
-/// requires the `google_maps_flutter` package plus per-platform API keys,
-/// which this project doesn't have configured. [onSetLocation] is the hook
-/// to swap in a real map picker later.
+/// Small static map preview with a coordinate readout and a "set location"
+/// action that opens the full interactive picker.
 class MapLocationPreview extends StatelessWidget {
   const MapLocationPreview({
     super.key,
@@ -38,19 +34,24 @@ class MapLocationPreview extends StatelessWidget {
           child: SizedBox(
             height: 120,
             width: double.infinity,
-            child: Stack(
-              fit: StackFit.expand,
-              children: <Widget>[
-                CustomPaint(painter: _MapGridPainter()),
-                const Align(
-                  alignment: Alignment(-0.2, -0.1),
-                  child: Icon(Icons.location_on, color: AppColors.burntOrange, size: 30),
+            child: IgnorePointer(
+              child: GoogleMap(
+                initialCameraPosition: CameraPosition(
+                  target: LatLng(latitude, longitude),
+                  zoom: 15,
                 ),
-                const Align(
-                  alignment: Alignment(0.45, 0.35),
-                  child: Icon(Icons.location_on, color: AppColors.burntOrange, size: 22),
-                ),
-              ],
+                zoomControlsEnabled: false,
+                scrollGesturesEnabled: false,
+                zoomGesturesEnabled: false,
+                rotateGesturesEnabled: false,
+                tiltGesturesEnabled: false,
+                markers: <Marker>{
+                  Marker(
+                    markerId: const MarkerId('preview-location'),
+                    position: LatLng(latitude, longitude),
+                  ),
+                },
+              ),
             ),
           ),
         ),
@@ -82,24 +83,4 @@ class MapLocationPreview extends StatelessWidget {
       ],
     );
   }
-}
-
-class _MapGridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFFE7EEE7));
-
-    final Paint road = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 6;
-    canvas.drawLine(Offset(0, size.height * 0.35), Offset(size.width, size.height * 0.55), road);
-    canvas.drawLine(Offset(size.width * 0.3, 0), Offset(size.width * 0.55, size.height), road);
-
-    final Paint block = Paint()..color = const Color(0xFFD5E4D5);
-    canvas.drawRect(Rect.fromLTWH(size.width * 0.05, size.height * 0.05, size.width * 0.18, size.height * 0.2), block);
-    canvas.drawRect(Rect.fromLTWH(size.width * 0.7, size.height * 0.65, size.width * 0.22, size.height * 0.25), block);
-  }
-
-  @override
-  bool shouldRepaint(covariant _MapGridPainter oldDelegate) => false;
 }

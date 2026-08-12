@@ -1,10 +1,24 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../core/app_colors.dart';
+import '../core/location_service.dart';
+import '../core/session.dart';
+import '../models/assistance_request.dart';
+import '../models/user_profile.dart';
+import '../services/assistance_request_api.dart';
+import '../services/user_api.dart';
 import '../widgets/dashboard_nav_bar.dart';
 import 'driver_home_map_screen.dart';
+import 'driver_profile_screen.dart';
+import 'settings_screen.dart';
 import 'emergency_sos_screen.dart';
+import 'login_screen.dart';
+import 'payment_history_screen.dart';
 import 'workshops_list_screen.dart';
+
+const Set<String> _activeStatuses = <String>{'PENDING', 'ACCEPTED', 'EN_ROUTE'};
 
 /// Persistent shell for the post-payment driver experience — a bottom nav
 /// switching between the map, the workshop directory, SOS, and profile.
@@ -17,6 +31,56 @@ class DriverMainDashboard extends StatefulWidget {
 
 class _DriverMainDashboardState extends State<DriverMainDashboard> {
   DashboardTab _tab = DashboardTab.home;
+  Timer? _locationTimer;
+  bool _isPushingLocation = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Live tracking: while this driver has an outstanding assistance
+    // request, push a fresh position every 15s so the workshop side can
+    // see where they are. Cheap no-op the rest of the time — one list
+    // call finds nothing active and skips the GPS read entirely.
+    _locationTimer = Timer.periodic(const Duration(seconds: 15), (_) => _pushLocationIfActive());
+  }
+
+  @override
+  void dispose() {
+    _locationTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _pushLocationIfActive() async {
+    // Guards against overlapping ticks: on a slow/degraded connection one
+    // call chain (list -> GPS -> PATCH) can outlast the 15s interval, and
+    // two in flight at once can resolve out of order, briefly regressing
+    // the workshop-side live map to an older position.
+    if (_isPushingLocation) return;
+    _isPushingLocation = true;
+    try {
+      final List<AssistanceRequest> mine = await AssistanceRequestApi.listMine();
+      final AssistanceRequest? active = mine
+          .cast<AssistanceRequest?>()
+          .firstWhere((AssistanceRequest? r) => _activeStatuses.contains(r!.status), orElse: () => null);
+      if (active == null) return;
+
+      // requestIfNeeded: false — this is a silent background timer, not a
+      // user action, so it must never surface an OS permission prompt.
+      final position = await LocationService.getCurrentPosition(requestIfNeeded: false);
+      if (position == null) return;
+
+      await AssistanceRequestApi.updateLocation(
+        requestId: active.id,
+        driverLatitude: position.latitude,
+        driverLongitude: position.longitude,
+      );
+    } catch (_) {
+      // Best-effort background tracking — a transient failure here
+      // shouldn't surface anywhere in the UI, just try again next tick.
+    } finally {
+      _isPushingLocation = false;
+    }
+  }
 
   void _selectTab(DashboardTab tab) => setState(() => _tab = tab);
 
@@ -42,8 +106,50 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
 
 /// Minimal placeholder — no design was provided for the driver's own
 /// profile screen, so this is a light stub rather than a guessed layout.
-class _ProfileTab extends StatelessWidget {
+class _ProfileTab extends StatefulWidget {
   const _ProfileTab();
+
+  @override
+  State<_ProfileTab> createState() => _ProfileTabState();
+}
+
+class _ProfileTabState extends State<_ProfileTab> {
+  late Future<UserProfile> _profileFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _profileFuture = UserApi.getMe();
+  }
+
+  Future<void> _confirmLogout(BuildContext context) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('Log Out'),
+        content: const Text('Are you sure you want to log out of AutoRescue?'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.dangerRed),
+            child: const Text('Log Out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    await Session.instance.clear();
+    if (!context.mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+      (Route<dynamic> route) => false,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -62,36 +168,56 @@ class _ProfileTab extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            Row(
-              children: <Widget>[
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: const BoxDecoration(
-                    color: AppColors.badgeSoft,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.person, color: AppColors.primaryBlue, size: 28),
-                ),
-                const SizedBox(width: 14),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'Driver Account',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.heading,
+            InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const DriverProfileScreen()),
+                );
+                if (mounted) setState(() => _profileFuture = UserApi.getMe());
+              },
+              child: FutureBuilder<UserProfile>(
+                future: _profileFuture,
+                builder: (BuildContext context, AsyncSnapshot<UserProfile> snapshot) {
+                  final UserProfile? profile = snapshot.data;
+                  return Row(
+                    children: <Widget>[
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: const BoxDecoration(
+                          color: AppColors.badgeSoft,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.person, color: AppColors.primaryBlue, size: 28),
                       ),
-                    ),
-                    Text(
-                      'Active · South-West Region',
-                      style: TextStyle(fontSize: 12, color: AppColors.slate),
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              profile?.fullName ?? 'Driver Account',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.heading,
+                              ),
+                            ),
+                            Text(
+                              profile?.email ?? 'Active · South-West Region',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12, color: AppColors.slate),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, size: 18, color: AppColors.slateLight),
+                    ],
+                  );
+                },
+              ),
             ),
             const SizedBox(height: 24),
             for (final (IconData icon, String label) in const <(IconData, String)>[
@@ -100,7 +226,20 @@ class _ProfileTab extends StatelessWidget {
               (Icons.settings_outlined, 'Settings'),
               (Icons.logout, 'Log Out'),
             ])
-              _ProfileRow(icon: icon, label: label),
+              _ProfileRow(
+                icon: icon,
+                label: label,
+                onTap: switch (label) {
+                  'Log Out' => () => _confirmLogout(context),
+                  'Payment History' => () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(builder: (_) => const PaymentHistoryScreen()),
+                      ),
+                  'Settings' => () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
+                      ),
+                  _ => null, // "My Vehicle" — no backend endpoint yet.
+                },
+              ),
           ],
         ),
       ),
@@ -109,36 +248,46 @@ class _ProfileTab extends StatelessWidget {
 }
 
 class _ProfileRow extends StatelessWidget {
-  const _ProfileRow({required this.icon, required this.label});
+  const _ProfileRow({required this.icon, required this.label, this.onTap});
 
   final IconData icon;
   final String label;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      decoration: BoxDecoration(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: <Widget>[
-          Icon(icon, size: 19, color: AppColors.slate),
-          const SizedBox(width: 12),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 13.5,
-              fontWeight: FontWeight.w600,
-              color: AppColors.heading,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              children: <Widget>[
+                Icon(icon, size: 19, color: AppColors.slate),
+                const SizedBox(width: 12),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.heading,
+                  ),
+                ),
+                const Spacer(),
+                const Icon(Icons.chevron_right, size: 18, color: AppColors.slateLight),
+              ],
             ),
           ),
-          const Spacer(),
-          const Icon(Icons.chevron_right, size: 18, color: AppColors.slateLight),
-        ],
+        ),
       ),
     );
   }

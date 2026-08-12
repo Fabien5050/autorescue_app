@@ -3,9 +3,11 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../core/api_client.dart';
 import '../../core/app_colors.dart';
 import '../../models/workshop_owner_profile.dart';
 import '../../models/workshop_photo.dart';
+import '../../services/workshop_api.dart';
 import '../../widgets/photo_grid_tile.dart';
 
 /// "Workshop Gallery" — a modern 2-column photo grid the owner can fill
@@ -49,7 +51,18 @@ class _WorkshopGalleryScreenState extends State<WorkshopGalleryScreen> {
     );
   }
 
-  Future<void> _fillSlot(WorkshopPhotoItem photo) async {
+  void _showError(Object error) {
+    final String message = error is ApiException ? error.message : 'Something went wrong';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFFDC2626),
+        behavior: SnackBarBehavior.floating,
+        content: Text(message),
+      ),
+    );
+  }
+
+  Future<void> _upload(String category, {WorkshopPhotoItem? replacing}) async {
     final ImageSource? source = await _chooseImageSource();
     if (source == null || !mounted) return;
 
@@ -58,23 +71,53 @@ class _WorkshopGalleryScreenState extends State<WorkshopGalleryScreen> {
 
     final Uint8List bytes = await picked.readAsBytes();
     if (!mounted) return;
-    setState(() => photo.bytes = bytes);
+
+    try {
+      if (replacing?.id != null) {
+        await WorkshopApi.deletePhoto(replacing!.id!);
+      }
+      final WorkshopPhotoItem uploaded = await WorkshopApi.addPhoto(
+        category: category,
+        fileBytes: bytes,
+        fileName: picked.name,
+      )
+        ..bytes = bytes;
+      if (!mounted) return;
+      setState(() {
+        if (replacing != null) {
+          final int index = _photos.indexOf(replacing);
+          if (index != -1) _photos[index] = uploaded;
+        } else {
+          _photos.add(uploaded);
+        }
+      });
+    } on ApiException catch (error) {
+      if (mounted) _showError(error);
+    }
   }
 
-  Future<void> _addNewSlot() async {
-    final ImageSource? source = await _chooseImageSource();
-    if (source == null || !mounted) return;
+  Future<void> _fillSlot(WorkshopPhotoItem photo) => _upload(photo.category, replacing: photo);
 
-    final XFile? picked = await _imagePicker.pickImage(source: source, imageQuality: 85);
-    if (picked == null || !mounted) return;
+  Future<void> _addNewSlot() => _upload('Other');
 
-    final Uint8List bytes = await picked.readAsBytes();
-    if (!mounted) return;
-    setState(() => _photos.add(WorkshopPhotoItem(category: 'Other', bytes: bytes)));
-  }
-
-  void _deletePhoto(WorkshopPhotoItem photo) {
-    setState(() => photo.bytes = null);
+  Future<void> _deletePhoto(WorkshopPhotoItem photo) async {
+    if (photo.id == null) return;
+    try {
+      await WorkshopApi.deletePhoto(photo.id!);
+      if (!mounted) return;
+      setState(() {
+        if (defaultPhotoCategories.contains(photo.category)) {
+          photo
+            ..bytes = null
+            ..id = null
+            ..photoUrl = null;
+        } else {
+          _photos.remove(photo);
+        }
+      });
+    } on ApiException catch (error) {
+      if (mounted) _showError(error);
+    }
   }
 
   @override

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../core/api_client.dart';
 import '../../core/app_colors.dart';
 import '../../models/day_hours.dart';
 import '../../models/workshop_owner_profile.dart';
+import '../../services/workshop_api.dart';
 import '../../widgets/operating_hours_row.dart';
 import '../../widgets/primary_button.dart';
 
@@ -18,6 +20,7 @@ class OperatingHoursScreen extends StatefulWidget {
 class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
   List<DayHours> get _hours => demoWorkshopOwnerProfile.operatingHours;
   bool get _open24Hours => demoWorkshopOwnerProfile.open24Hours;
+  bool _isSaving = false;
 
   Future<void> _pickTime(DayHours day, {required bool isOpenTime}) async {
     final TimeOfDay? picked = await showTimePicker(
@@ -48,11 +51,38 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
     );
   }
 
-  void _save() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(behavior: SnackBarBehavior.floating, content: Text('Operating hours saved')),
-    );
-    Navigator.of(context).pop();
+  Future<void> _save() async {
+    setState(() => _isSaving = true);
+    try {
+      await WorkshopApi.replaceHours(_hours);
+      await WorkshopApi.updateProfile(
+        name: demoWorkshopOwnerProfile.name,
+        description: demoWorkshopOwnerProfile.description,
+        phone: demoWorkshopOwnerProfile.phone,
+        whatsapp: demoWorkshopOwnerProfile.whatsapp,
+        emergencyContact: demoWorkshopOwnerProfile.emergencyContact,
+        address: demoWorkshopOwnerProfile.address,
+        latitude: demoWorkshopOwnerProfile.latitude,
+        longitude: demoWorkshopOwnerProfile.longitude,
+        open24Hours: demoWorkshopOwnerProfile.open24Hours,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(behavior: SnackBarBehavior.floating, content: Text('Operating hours saved')),
+      );
+      Navigator.of(context).pop();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          content: Text(error.message),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -113,7 +143,10 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
                 const SizedBox(height: 10),
               ],
             const SizedBox(height: 12),
-            PrimaryButton(label: 'Save Hours', onPressed: _save),
+            PrimaryButton(
+              label: _isSaving ? 'Saving…' : 'Save Hours',
+              onPressed: _isSaving ? null : _save,
+            ),
           ],
         ),
       ),

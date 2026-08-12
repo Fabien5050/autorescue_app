@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../core/api_client.dart';
 import '../core/app_colors.dart';
 import '../models/user_role.dart';
+import '../services/auth_api.dart';
 import '../widgets/floating_label_field.dart';
 import '../widgets/phone_field.dart';
 import '../widgets/primary_button.dart';
@@ -18,7 +20,7 @@ const List<String> _vehicleCategories = <String>[
   'Van',
 ];
 
-const List<String> _countryCodes = <String>['+1', '+237', '+44', '+33', '+234'];
+const List<String> _countryCodes = <String>['+237', '+1', '+44', '+33', '+234'];
 
 /// Driver sign-up form: personal identity, vehicle details, emergency contact.
 class DriverRegistrationScreen extends StatefulWidget {
@@ -53,6 +55,7 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
   String _vehicleCategory = _vehicleCategories.first;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -95,20 +98,49 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
     return null;
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     FocusScope.of(context).unfocus();
+    if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    // TODO: re-enable `_formKey.currentState?.validate()` gating once the
-    // real registration backend exists — skipped for now so every screen
-    // stays reachable while there's nothing to submit to.
+    setState(() => _isSubmitting = true);
+    try {
+      await AuthApi.registerDriver(
+        fullName: _fullNameController.text.trim(),
+        email: _emailController.text.trim(),
+        phoneNumber: '$_countryCode${_phoneController.text.trim()}',
+        password: _passwordController.text,
+        vehicle: DriverVehicleInput(
+          category: _vehicleCategory,
+          makeModel: _makeModelController.text.trim(),
+          licensePlate: _licensePlateController.text.trim(),
+          color: _colorController.text.trim(),
+        ),
+        emergencyContact: EmergencyContactInput(
+          contactName: _contactNameController.text.trim(),
+          contactPhone: _contactPhoneController.text.trim(),
+        ),
+      );
+      if (!mounted) return;
 
-    // Hook the real registration call in here. Drivers don't wait on admin
-    // review, so the next stop is straight to activation payment.
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(
-        builder: (_) => const PaymentScreen(userRole: UserRole.driver),
-      ),
-    );
+      // Drivers don't wait on admin review, so the next stop is straight to
+      // activation payment.
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) => const PaymentScreen(userRole: UserRole.driver),
+        ),
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          content: Text(error.message),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
   void _goToLogin() {
@@ -362,9 +394,11 @@ class _DriverRegistrationScreenState extends State<DriverRegistrationScreen> {
                 ),
                 const SizedBox(height: 22),
                 PrimaryButton(
-                  label: 'Complete Driver Registration',
+                  label: _isSubmitting
+                      ? 'Submitting…'
+                      : 'Complete Driver Registration',
                   color: AppColors.burntOrange,
-                  onPressed: _submit,
+                  onPressed: _isSubmitting ? null : _submit,
                 ),
                 const SizedBox(height: 18),
                 Center(

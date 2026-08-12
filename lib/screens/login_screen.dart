@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 
+import '../core/api_client.dart';
 import '../core/app_colors.dart';
+import '../core/session.dart';
 import '../models/user_role.dart';
+import '../services/auth_api.dart';
 import '../widgets/labeled_text_field.dart';
 import '../widgets/primary_button.dart';
 import '../widgets/role_card.dart';
 import 'driver_registration_screen.dart';
+import 'forgot_password_screen.dart';
 import 'location_permission_screen.dart';
+import 'workshop_owner/workshop_owner_main.dart';
 import 'workshop_registration_screen.dart';
 
 /// Role selection + credentials entry.
@@ -25,6 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
   UserRole _selectedRole = UserRole.driver;
   bool _rememberMe = false;
   bool _obscurePassword = true;
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -34,6 +40,12 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _selectRole(UserRole role) => setState(() => _selectedRole = role);
+
+  void _goToForgotPassword() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const ForgotPasswordScreen()),
+    );
+  }
 
   String? _validateEmail(String? value) {
     final String email = (value ?? '').trim();
@@ -50,25 +62,44 @@ class _LoginScreenState extends State<LoginScreen> {
     return null;
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     FocusScope.of(context).unfocus();
+    if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    // TODO: re-enable `_formKey.currentState?.validate()` gating once the
-    // real auth backend exists — skipped for now so every screen stays
-    // reachable while there's nothing to submit to.
+    setState(() => _isSubmitting = true);
+    try {
+      await AuthApi.login(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+      if (!mounted) return;
 
-    if (_selectedRole == UserRole.driver) {
-      // "Get Started" here represents an existing driver signing in, so it
-      // skips registration/payment and heads straight into onboarding.
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => const LocationPermissionScreen(),
+      // Route by the role the backend actually returned, not the locally
+      // selected role card — that's just UI framing before we know who
+      // this account belongs to.
+      if (Session.instance.role == 'MECHANIC') {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(builder: (_) => const WorkshopOwnerMain()),
+        );
+      } else {
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => const LocationPermissionScreen(),
+          ),
+        );
+      }
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          content: Text(error.message),
         ),
       );
-      return;
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
-
-    _goToRegistration();
   }
 
   void _goToRegistration() {
@@ -172,10 +203,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   rememberMe: _rememberMe,
                   onRememberChanged: (bool value) =>
                       setState(() => _rememberMe = value),
-                  onForgotPassword: () {},
+                  onForgotPassword: _goToForgotPassword,
                 ),
                 const SizedBox(height: 14),
-                PrimaryButton(label: 'Get Started', onPressed: _submit),
+                PrimaryButton(
+                  label: _isSubmitting ? 'Signing In…' : 'Get Started',
+                  onPressed: _isSubmitting ? null : _submit,
+                ),
                 const SizedBox(height: 18),
                 Center(child: _SignUpPrompt(onTap: _goToRegistration)),
               ],

@@ -52,6 +52,8 @@ class StatCard extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
           ),
         ],
