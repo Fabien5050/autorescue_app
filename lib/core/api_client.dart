@@ -90,6 +90,17 @@ class ApiClient {
     return _decode(response);
   }
 
+  /// Like [delete], but for endpoints that need a JSON body (e.g. a
+  /// password confirmation) alongside the DELETE verb.
+  static Future<dynamic> deleteWithBody(String path, Map<String, dynamic> body) async {
+    final http.Response response = await _client.delete(
+      _uri(path),
+      headers: _headers,
+      body: jsonEncode(body),
+    );
+    return _decode(response);
+  }
+
   /// Multipart upload — `fields` are plain form fields, `file` is the
   /// binary payload under form field name `file`.
   static Future<dynamic> postMultipart(

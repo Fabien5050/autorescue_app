@@ -59,6 +59,14 @@ class _SplashScreenState extends State<SplashScreen>
     await _restoreFuture;
     if (!mounted) return;
 
+    // An ADMIN session only ever belongs on the web-only /admin route, not
+    // this driver/mechanic entry point — treat it as signed out here rather
+    // than dropping an admin into the driver dashboard.
+    if (Session.instance.role == 'ADMIN') {
+      await Session.instance.clear();
+      if (!mounted) return;
+    }
+
     final Widget destination = !Session.instance.isLoggedIn
         ? const LoginScreen()
         : Session.instance.role == 'MECHANIC'

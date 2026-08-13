@@ -30,6 +30,13 @@ class UserApi {
     });
   }
 
+  /// Permanently deletes the signed-in user's account. The caller is
+  /// responsible for clearing [Session] and navigating away on success —
+  /// this only makes the backend call.
+  static Future<void> deleteAccount(String password) async {
+    await ApiClient.deleteWithBody('/api/users/me', <String, dynamic>{'password': password});
+  }
+
   static Future<UserProfile> uploadProfilePhoto({
     required List<int> fileBytes,
     required String fileName,

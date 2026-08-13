@@ -23,7 +23,9 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
   }
 
   Future<void> _refresh() async {
-    setState(() => _paymentsFuture = PaymentApi.listMine());
+    setState(() {
+      _paymentsFuture = PaymentApi.listMine();
+    });
     await _paymentsFuture;
   }
 

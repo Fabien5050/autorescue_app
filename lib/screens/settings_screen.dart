@@ -3,9 +3,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/api_client.dart';
 import '../core/app_colors.dart';
+import '../core/session.dart';
+import '../core/websocket_service.dart';
 import '../services/user_api.dart';
 import '../widgets/labeled_text_field.dart';
 import '../widgets/primary_button.dart';
+import 'login_screen.dart';
 
 const String _notificationsPrefKey = 'autorescue.notificationsEnabled';
 
@@ -33,6 +36,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _obscureCurrent = true;
   bool _obscureNew = true;
   bool _obscureConfirm = true;
+
+  bool _isDeletingAccount = false;
 
   @override
   void initState() {
@@ -104,6 +109,110 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) _showSnack(error.message, isError: true);
     } finally {
       if (mounted) setState(() => _isChangingPassword = false);
+    }
+  }
+
+  Future<void> _confirmLogout() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('Log Out'),
+        content: const Text('Are you sure you want to log out of AutoRescue?'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.dangerRed),
+            child: const Text('Log Out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    WebSocketService.instance.disconnect();
+    await Session.instance.clear();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+      (Route<dynamic> route) => false,
+    );
+  }
+
+  Future<void> _confirmDeleteAccount() async {
+    final TextEditingController passwordController = TextEditingController();
+    bool obscure = true;
+    String? errorText;
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setDialogState) => AlertDialog(
+          title: const Text('Delete Account'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const Text(
+                'This permanently deletes your account and everything tied '
+                "to it — there's no undo. Enter your password to confirm.",
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: passwordController,
+                obscureText: obscure,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  errorText: errorText,
+                  suffixIcon: IconButton(
+                    icon: Icon(obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                    onPressed: () => setDialogState(() => obscure = !obscure),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (passwordController.text.isEmpty) {
+                  setDialogState(() => errorText = 'Please enter your password');
+                  return;
+                }
+                Navigator.of(dialogContext).pop(true);
+              },
+              style: FilledButton.styleFrom(backgroundColor: AppColors.dangerRed),
+              child: const Text('Delete Forever'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isDeletingAccount = true);
+    try {
+      await UserApi.deleteAccount(passwordController.text);
+      if (!mounted) return;
+      WebSocketService.instance.disconnect();
+      await Session.instance.clear();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+        (Route<dynamic> route) => false,
+      );
+    } on ApiException catch (error) {
+      if (mounted) _showSnack(error.message, isError: true);
+    } finally {
+      if (mounted) setState(() => _isDeletingAccount = false);
     }
   }
 
@@ -252,8 +361,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                   const SizedBox(height: 20),
+                  _SectionLabel('Account'),
+                  _SettingsRow(icon: Icons.logout, label: 'Log Out', onTap: _confirmLogout),
+                  const SizedBox(height: 20),
                   _SectionLabel('About'),
                   const _SettingsRow(icon: Icons.info_outline, label: 'App Version', trailing: 'v1.0.0'),
+                  const SizedBox(height: 20),
+                  _SectionLabel('Danger Zone'),
+                  _SettingsRow(
+                    icon: Icons.delete_forever_outlined,
+                    label: _isDeletingAccount ? 'Deleting Account…' : 'Delete Account',
+                    onTap: _isDeletingAccount ? null : _confirmDeleteAccount,
+                    danger: true,
+                  ),
                 ],
               ),
       ),
@@ -279,15 +399,25 @@ class _SectionLabel extends StatelessWidget {
 }
 
 class _SettingsRow extends StatelessWidget {
-  const _SettingsRow({required this.icon, required this.label, this.onTap, this.trailing});
+  const _SettingsRow({
+    required this.icon,
+    required this.label,
+    this.onTap,
+    this.trailing,
+    this.danger = false,
+  });
 
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
   final String? trailing;
+  final bool danger;
 
   @override
   Widget build(BuildContext context) {
+    final Color color = danger ? AppColors.dangerRed : AppColors.slate;
+    final Color textColor = danger ? AppColors.dangerRed : AppColors.heading;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
@@ -300,15 +430,15 @@ class _SettingsRow extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: danger ? AppColors.dangerRed.withValues(alpha: 0.3) : AppColors.border),
             ),
             child: Row(
               children: <Widget>[
-                Icon(icon, size: 19, color: AppColors.slate),
+                Icon(icon, size: 19, color: color),
                 const SizedBox(width: 12),
                 Text(
                   label,
-                  style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.heading),
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: textColor),
                 ),
                 const Spacer(),
                 if (trailing != null)

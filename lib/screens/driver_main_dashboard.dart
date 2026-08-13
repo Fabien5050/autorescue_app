@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../core/location_service.dart';
 import '../core/session.dart';
+import '../core/websocket_service.dart';
 import '../models/assistance_request.dart';
+import '../models/notification_message.dart';
 import '../models/user_profile.dart';
 import '../services/assistance_request_api.dart';
 import '../services/user_api.dart';
@@ -33,6 +35,8 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
   DashboardTab _tab = DashboardTab.home;
   Timer? _locationTimer;
   bool _isPushingLocation = false;
+  AssistanceRequest? _activeRequest;
+  StreamSubscription<NotificationMessage>? _notificationSub;
 
   @override
   void initState() {
@@ -42,12 +46,48 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
     // see where they are. Cheap no-op the rest of the time — one list
     // call finds nothing active and skips the GPS read entirely.
     _locationTimer = Timer.periodic(const Duration(seconds: 15), (_) => _pushLocationIfActive());
+
+    WebSocketService.instance.connect();
+    _notificationSub = WebSocketService.instance.notifications.listen(_onNotification);
+    _refreshActiveRequest();
   }
 
   @override
   void dispose() {
     _locationTimer?.cancel();
+    _notificationSub?.cancel();
     super.dispose();
+  }
+
+  Future<AssistanceRequest?> _fetchActiveRequest() async {
+    final List<AssistanceRequest> mine = await AssistanceRequestApi.listMine();
+    return mine
+        .cast<AssistanceRequest?>()
+        .firstWhere((AssistanceRequest? r) => _activeStatuses.contains(r!.status), orElse: () => null);
+  }
+
+  Future<void> _refreshActiveRequest() async {
+    try {
+      final AssistanceRequest? active = await _fetchActiveRequest();
+      if (mounted) setState(() => _activeRequest = active);
+    } catch (_) {
+      // Best-effort — the banner just stays as it was.
+    }
+  }
+
+  /// A status push affecting this driver's own request — re-fetch (cheap;
+  /// this app has at most one active request per driver) and surface a
+  /// toast so the change is noticed even off the tab that shows it.
+  void _onNotification(NotificationMessage message) {
+    _refreshActiveRequest();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.primaryBlue,
+        behavior: SnackBarBehavior.floating,
+        content: Text(message.message),
+      ),
+    );
   }
 
   Future<void> _pushLocationIfActive() async {
@@ -58,10 +98,8 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
     if (_isPushingLocation) return;
     _isPushingLocation = true;
     try {
-      final List<AssistanceRequest> mine = await AssistanceRequestApi.listMine();
-      final AssistanceRequest? active = mine
-          .cast<AssistanceRequest?>()
-          .firstWhere((AssistanceRequest? r) => _activeStatuses.contains(r!.status), orElse: () => null);
+      final AssistanceRequest? active = await _fetchActiveRequest();
+      if (mounted) setState(() => _activeRequest = active);
       if (active == null) return;
 
       // requestIfNeeded: false — this is a silent background timer, not a
@@ -87,19 +125,75 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: DashboardTab.values.indexOf(_tab),
+      body: Column(
         children: <Widget>[
-          DriverHomeMapScreen(
-            onEmergencyTap: () => _selectTab(DashboardTab.sos),
-            onViewAllWorkshops: () => _selectTab(DashboardTab.workshops),
+          if (_activeRequest != null) _ActiveRequestBanner(request: _activeRequest!),
+          Expanded(
+            child: IndexedStack(
+              index: DashboardTab.values.indexOf(_tab),
+              children: <Widget>[
+                DriverHomeMapScreen(
+                  onEmergencyTap: () => _selectTab(DashboardTab.sos),
+                  onViewAllWorkshops: () => _selectTab(DashboardTab.workshops),
+                ),
+                WorkshopsListScreen(onViewMap: () => _selectTab(DashboardTab.home)),
+                const EmergencySosScreen(),
+                const _ProfileTab(),
+              ],
+            ),
           ),
-          WorkshopsListScreen(onViewMap: () => _selectTab(DashboardTab.home)),
-          const EmergencySosScreen(),
-          const _ProfileTab(),
         ],
       ),
       bottomNavigationBar: DashboardNavBar(current: _tab, onSelect: _selectTab),
+    );
+  }
+}
+
+/// Persistent strip showing the live status of the driver's one outstanding
+/// request — updates instantly on a WebSocket push rather than waiting for
+/// the driver to happen to look at a particular screen.
+class _ActiveRequestBanner extends StatelessWidget {
+  const _ActiveRequestBanner({required this.request});
+
+  final AssistanceRequest request;
+
+  Color get _statusColor => switch (request.status) {
+    'PENDING' => AppColors.warningOrange,
+    'ACCEPTED' => AppColors.primaryBlue,
+    'EN_ROUTE' => AppColors.secondaryCyan,
+    _ => AppColors.secondaryText,
+  };
+
+  String get _statusLabel => switch (request.status) {
+    'PENDING' => 'Waiting for a workshop to accept your request…',
+    'ACCEPTED' => '${request.workshopName ?? 'A workshop'} accepted your request.',
+    'EN_ROUTE' => '${request.workshopName ?? 'Help'} is on the way.',
+    _ => request.status,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      color: _statusColor.withValues(alpha: 0.12),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: _statusColor, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _statusLabel,
+              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: _statusColor),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -143,6 +237,7 @@ class _ProfileTabState extends State<_ProfileTab> {
     );
     if (confirmed != true || !context.mounted) return;
 
+    WebSocketService.instance.disconnect();
     await Session.instance.clear();
     if (!context.mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
@@ -174,7 +269,11 @@ class _ProfileTabState extends State<_ProfileTab> {
                 await Navigator.of(context).push(
                   MaterialPageRoute<void>(builder: (_) => const DriverProfileScreen()),
                 );
-                if (mounted) setState(() => _profileFuture = UserApi.getMe());
+                if (mounted) {
+                  setState(() {
+                    _profileFuture = UserApi.getMe();
+                  });
+                }
               },
               child: FutureBuilder<UserProfile>(
                 future: _profileFuture,

@@ -5,7 +5,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../core/api_client.dart';
 import '../../core/app_colors.dart';
+import '../../core/websocket_service.dart';
 import '../../models/assistance_request.dart';
+import '../../models/notification_message.dart';
 import '../../services/assistance_request_api.dart';
 
 const Set<String> _trackableStatuses = <String>{'PENDING', 'ACCEPTED', 'EN_ROUTE'};
@@ -25,6 +27,7 @@ class _WorkshopRequestsScreenState extends State<WorkshopRequestsScreen> {
   List<AssistanceRequest> _requests = <AssistanceRequest>[];
   final Set<int> _updatingIds = <int>{};
   Timer? _liveTrackingTimer;
+  StreamSubscription<NotificationMessage>? _notificationSub;
 
   @override
   void initState() {
@@ -37,12 +40,33 @@ class _WorkshopRequestsScreenState extends State<WorkshopRequestsScreen> {
         _silentRefresh();
       }
     });
+
+    // connect() is a no-op if the driver dashboard (or a prior mount of
+    // this screen) already opened the connection this session.
+    WebSocketService.instance.connect();
+    _notificationSub = WebSocketService.instance.notifications.listen(_onNotification);
   }
 
   @override
   void dispose() {
     _liveTrackingTimer?.cancel();
+    _notificationSub?.cancel();
     super.dispose();
+  }
+
+  /// A new request or a driver-side cancellation — refresh immediately
+  /// rather than waiting for the next 15s poll. Simpler than reconstructing
+  /// a full [AssistanceRequest] from the notification's terse payload.
+  void _onNotification(NotificationMessage message) {
+    _silentRefresh();
+    if (!mounted || message.type != NotificationType.newRequest) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.primaryBlue,
+        behavior: SnackBarBehavior.floating,
+        content: Text(message.message),
+      ),
+    );
   }
 
   void _load() {

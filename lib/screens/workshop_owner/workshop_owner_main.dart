@@ -32,7 +32,9 @@ class _WorkshopOwnerMainState extends State<WorkshopOwnerMain> {
 
   void _selectTab(WorkshopOwnerTab tab) => setState(() => _tab = tab);
 
-  void _retry() => setState(() => _loadProfile = WorkshopApi.refreshMyProfile());
+  void _retry() => setState(() {
+    _loadProfile = WorkshopApi.refreshMyProfile();
+  });
 
   @override
   Widget build(BuildContext context) {
