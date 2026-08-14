@@ -15,11 +15,21 @@ class AutoRescueApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // MaterialApp's implicit "restore the initial route from the URL"
+    // behavior isn't reliable for a cold page load under hash-based web
+    // routing (e.g. GitHub Pages) — it was falling back to `home`
+    // (SplashScreen) even when the browser was pointed at .../#/admin,
+    // which then auto-navigated to the regular driver/mechanic login after
+    // its timer. Reading Uri.base directly sidesteps that: it reflects the
+    // real browser URL the page was loaded with, so the admin entry point
+    // is chosen correctly regardless of how Navigator resolves route names.
+    final bool isAdminEntry = kIsWeb && Uri.base.fragment.startsWith('/admin');
+
     return MaterialApp(
       title: 'AutoRescue SW',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      home: const SplashScreen(),
+      home: isAdminEntry ? const AdminLoginScreen() : const SplashScreen(),
       routes: <String, WidgetBuilder>{
         '/login': (BuildContext context) => const LoginScreen(),
         // Web-only: the admin portal isn't part of the mobile app, and
