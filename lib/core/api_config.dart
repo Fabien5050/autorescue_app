@@ -15,4 +15,16 @@ class ApiConfig {
     if (Platform.isAndroid) return 'http://10.0.2.2:8081';
     return 'http://localhost:8081';
   }
+
+  /// Uploaded-file URLs come back from the backend two ways depending on
+  /// when they were uploaded: newer ones are already-absolute Cloudinary
+  /// URLs, older ones are server-relative paths (e.g.
+  /// `/uploads/profile-photos/x.jpg`) from before that switch and need
+  /// [baseUrl] prefixed. This handles both without the caller needing to
+  /// know which kind it has.
+  static String? resolveFileUrl(String? url) {
+    if (url == null) return null;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    return '$baseUrl$url';
+  }
 }

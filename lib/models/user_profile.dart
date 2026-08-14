@@ -21,10 +21,7 @@ class UserProfile {
   final String? profilePhotoUrl;
   final DateTime createdAt;
 
-  /// [profilePhotoUrl] is server-relative (e.g. `/uploads/profile-photos/x.jpg`);
-  /// this resolves it against the backend's base URL for `Image.network`.
-  String? get fullProfilePhotoUrl =>
-      profilePhotoUrl == null ? null : '${ApiConfig.baseUrl}$profilePhotoUrl';
+  String? get fullProfilePhotoUrl => ApiConfig.resolveFileUrl(profilePhotoUrl);
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
     id: json['id'] as int,

@@ -13,9 +13,7 @@ class WorkshopPhotoItem {
   int? id;
   String? photoUrl;
 
-  /// [photoUrl] is server-relative (e.g. `/uploads/workshop-photos/x.jpg`);
-  /// this resolves it against the backend's base URL for `Image.network`.
-  String? get fullPhotoUrl => photoUrl == null ? null : '${ApiConfig.baseUrl}$photoUrl';
+  String? get fullPhotoUrl => ApiConfig.resolveFileUrl(photoUrl);
 
   factory WorkshopPhotoItem.fromJson(Map<String, dynamic> json) => WorkshopPhotoItem(
     id: json['id'] as int?,
