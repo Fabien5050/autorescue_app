@@ -53,10 +53,15 @@ class _DriverHomeMapScreenState extends State<DriverHomeMapScreen> {
     _myLatitude = position?.latitude ?? LocationService.fallbackLatitude;
     _myLongitude = position?.longitude ?? LocationService.fallbackLongitude;
 
-    final List<Workshop> workshops = await WorkshopApi.listNearby(
+    List<Workshop> workshops = await WorkshopApi.listNearby(
       latitude: _myLatitude,
       longitude: _myLongitude,
     );
+    // Nothing within range (e.g. no coverage yet in this area) — fall back
+    // to every approved workshop rather than leaving the map empty.
+    if (workshops.isEmpty) {
+      workshops = await WorkshopApi.listAll(fromLatitude: _myLatitude, fromLongitude: _myLongitude);
+    }
     if (!mounted) return;
     setState(() {
       _workshops = workshops;

@@ -4,16 +4,20 @@ import 'package:flutter/material.dart';
 
 import '../core/app_colors.dart';
 import '../core/location_service.dart';
+import '../core/notification_service.dart';
 import '../core/session.dart';
 import '../core/websocket_service.dart';
 import '../models/assistance_request.dart';
 import '../models/call_signal.dart';
 import '../models/call_token.dart';
+import '../models/chat_message.dart';
 import '../models/notification_message.dart';
 import '../models/user_profile.dart';
+import '../models/workshop.dart';
 import '../services/assistance_request_api.dart';
 import '../services/call_api.dart';
 import '../services/user_api.dart';
+import '../services/workshop_api.dart';
 import '../widgets/dashboard_nav_bar.dart';
 import '../widgets/incoming_call_dialog.dart';
 import 'call_screen.dart';
@@ -24,6 +28,8 @@ import 'settings_screen.dart';
 import 'emergency_sos_screen.dart';
 import 'login_screen.dart';
 import 'payment_history_screen.dart';
+import 'vehicle_screen.dart';
+import 'workshop_profile_screen.dart';
 import 'workshops_list_screen.dart';
 
 const Set<String> _activeStatuses = <String>{'PENDING', 'ACCEPTED', 'EN_ROUTE'};
@@ -44,6 +50,7 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
   AssistanceRequest? _activeRequest;
   StreamSubscription<NotificationMessage>? _notificationSub;
   StreamSubscription<CallSignal>? _callSignalSub;
+  StreamSubscription<ChatMessage>? _chatMessageSub;
   bool _startingCall = false;
 
   @override
@@ -58,6 +65,7 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
     WebSocketService.instance.connect();
     _notificationSub = WebSocketService.instance.notifications.listen(_onNotification);
     _callSignalSub = WebSocketService.instance.callSignals.listen(_onCallSignal);
+    _chatMessageSub = WebSocketService.instance.chatMessages.listen(_onChatMessage);
     _refreshActiveRequest();
   }
 
@@ -66,12 +74,21 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
     _locationTimer?.cancel();
     _notificationSub?.cancel();
     _callSignalSub?.cancel();
+    _chatMessageSub?.cancel();
     super.dispose();
   }
 
   void _onCallSignal(CallSignal signal) {
     if (signal.type != CallSignalType.callInvite || !mounted) return;
     IncomingCallDialog.show(context, signal);
+  }
+
+  void _onChatMessage(ChatMessage message) {
+    NotificationService.showChatMessage(
+      requestId: message.requestId,
+      senderName: message.senderName,
+      content: message.content,
+    );
   }
 
   Future<void> _startCall() async {
@@ -107,6 +124,28 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
         otherPartyName: request.workshopName ?? 'Workshop',
       ),
     ));
+  }
+
+  Future<void> _openWorkshopDetails() async {
+    final AssistanceRequest? request = _activeRequest;
+    if (request == null || request.workshopId == null) return;
+    try {
+      final Workshop workshop = await WorkshopApi.getById(
+        request.workshopId!,
+        fromLatitude: request.driverLatitude,
+        fromLongitude: request.driverLongitude,
+      );
+      if (!mounted) return;
+      Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (BuildContext _) => WorkshopProfileScreen(workshop: workshop),
+      ));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Couldn\'t load workshop details: $e')),
+        );
+      }
+    }
   }
 
   Future<AssistanceRequest?> _fetchActiveRequest() async {
@@ -172,6 +211,10 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
 
   void _selectTab(DashboardTab tab) => setState(() => _tab = tab);
 
+  bool get _isCallable =>
+      _activeRequest != null &&
+      (_activeRequest!.status == 'ACCEPTED' || _activeRequest!.status == 'EN_ROUTE');
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -180,8 +223,7 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
           if (_activeRequest != null)
             _ActiveRequestBanner(
               request: _activeRequest!,
-              onCall: _startingCall ? null : _startCall,
-              onChat: _openChat,
+              onTapWorkshop: _openWorkshopDetails,
             ),
           Expanded(
             child: IndexedStack(
@@ -199,22 +241,36 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
           ),
         ],
       ),
-      bottomNavigationBar: DashboardNavBar(current: _tab, onSelect: _selectTab),
+      // Call/message live right above the bottom nav — the zone of the
+      // screen a thumb actually reaches — instead of tiny icons in the top
+      // status strip, which is what this was before and was flagged as
+      // hard to use.
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (_isCallable)
+            _QuickActionsBar(
+              workshopName: _activeRequest!.workshopName ?? 'workshop',
+              isCalling: _startingCall,
+              onCall: _startCall,
+              onChat: _openChat,
+            ),
+          DashboardNavBar(current: _tab, onSelect: _selectTab),
+        ],
+      ),
     );
   }
 }
 
 /// Persistent strip showing the live status of the driver's one outstanding
 /// request — updates instantly on a WebSocket push rather than waiting for
-/// the driver to happen to look at a particular screen.
+/// the driver to happen to look at a particular screen. Tapping it opens
+/// the workshop's full profile once one is attached.
 class _ActiveRequestBanner extends StatelessWidget {
-  const _ActiveRequestBanner({required this.request, this.onCall, this.onChat});
+  const _ActiveRequestBanner({required this.request, this.onTapWorkshop});
 
   final AssistanceRequest request;
-  final VoidCallback? onCall;
-  final VoidCallback? onChat;
-
-  bool get _isCallable => request.status == 'ACCEPTED' || request.status == 'EN_ROUTE';
+  final VoidCallback? onTapWorkshop;
 
   Color get _statusColor => switch (request.status) {
     'PENDING' => AppColors.warningOrange,
@@ -232,40 +288,96 @@ class _ActiveRequestBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool tappable = request.workshopId != null && onTapWorkshop != null;
+    return InkWell(
+      onTap: tappable ? onTapWorkshop : null,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        color: _statusColor.withValues(alpha: 0.12),
+        child: Row(
+          children: <Widget>[
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(color: _statusColor, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                _statusLabel,
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: _statusColor),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (tappable) Icon(Icons.chevron_right, size: 18, color: _statusColor),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Full-width Call/Message bar shown directly above the bottom nav while
+/// there's an active, in-contact request — the most thumb-reachable part
+/// of the screen, and impossible to miss.
+class _QuickActionsBar extends StatelessWidget {
+  const _QuickActionsBar({
+    required this.workshopName,
+    required this.isCalling,
+    required this.onCall,
+    required this.onChat,
+  });
+
+  final String workshopName;
+  final bool isCalling;
+  final VoidCallback onCall;
+  final VoidCallback onChat;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      color: _statusColor.withValues(alpha: 0.12),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: _statusColor, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              _statusLabel,
-              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: _statusColor),
-              overflow: TextOverflow.ellipsis,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: onChat,
+                icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                label: const Text('Message'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primaryBlue,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                ),
+              ),
             ),
-          ),
-          if (_isCallable && onChat != null)
-            IconButton(
-              onPressed: onChat,
-              icon: Icon(Icons.chat_bubble_outline, color: _statusColor, size: 19),
-              tooltip: 'Message ${request.workshopName ?? 'workshop'}',
-              visualDensity: VisualDensity.compact,
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: isCalling ? null : onCall,
+                icon: isCalling
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.call, size: 18),
+                label: Text(isCalling ? 'Calling…' : 'Call'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                ),
+              ),
             ),
-          if (_isCallable && onCall != null)
-            IconButton(
-              onPressed: onCall,
-              icon: Icon(Icons.call, color: _statusColor, size: 20),
-              tooltip: 'Call ${request.workshopName ?? 'workshop'}',
-              visualDensity: VisualDensity.compact,
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -352,16 +464,25 @@ class _ProfileTabState extends State<_ProfileTab> {
                 future: _profileFuture,
                 builder: (BuildContext context, AsyncSnapshot<UserProfile> snapshot) {
                   final UserProfile? profile = snapshot.data;
+                  final String? photoUrl = profile?.fullProfilePhotoUrl;
                   return Row(
                     children: <Widget>[
                       Container(
                         width: 56,
                         height: 56,
+                        clipBehavior: Clip.antiAlias,
                         decoration: const BoxDecoration(
                           color: AppColors.badgeSoft,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.person, color: AppColors.primaryBlue, size: 28),
+                        child: photoUrl != null
+                            ? Image.network(
+                                photoUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (BuildContext _, Object _, StackTrace? _) =>
+                                    const Icon(Icons.person, color: AppColors.primaryBlue, size: 28),
+                              )
+                            : const Icon(Icons.person, color: AppColors.primaryBlue, size: 28),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -403,13 +524,16 @@ class _ProfileTabState extends State<_ProfileTab> {
                 label: label,
                 onTap: switch (label) {
                   'Log Out' => () => _confirmLogout(context),
+                  'My Vehicle' => () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(builder: (_) => const VehicleScreen()),
+                      ),
                   'Payment History' => () => Navigator.of(context).push(
                         MaterialPageRoute<void>(builder: (_) => const PaymentHistoryScreen()),
                       ),
                   'Settings' => () => Navigator.of(context).push(
                         MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
                       ),
-                  _ => null, // "My Vehicle" — no backend endpoint yet.
+                  _ => null,
                 },
               ),
           ],

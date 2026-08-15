@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import 'workshop_photo.dart';
+
 /// A certified workshop as shown across the driver dashboard's map, list,
 /// profile, and SOS screens.
 class Workshop {
@@ -17,6 +19,7 @@ class Workshop {
     this.reviewCount,
     this.address,
     this.openingHours,
+    this.photos = const <WorkshopPhotoItem>[],
   });
 
   /// Backend workshop id — populated when built from a real
@@ -39,6 +42,11 @@ class Workshop {
   final int? reviewCount;
   final String? address;
   final String? openingHours;
+
+  /// Only populated when built from `GET /api/workshops/{id}` (the driver's
+  /// workshop-detail view) — the list/nearby endpoints don't include the
+  /// full photo gallery.
+  final List<WorkshopPhotoItem> photos;
 
   String get distanceLabel => distanceKm < 1
       ? '${(distanceKm * 1000).round()}m away'
@@ -71,6 +79,10 @@ class Workshop {
       isOpenNow: json['availabilityStatus'] == 'AVAILABLE',
       phone: (json['phone'] as String?) ?? '',
       address: json['address'] as String?,
+      photos: (json['photos'] as List<dynamic>? ?? <dynamic>[])
+          .map((dynamic e) => WorkshopPhotoItem.fromJson(e as Map<String, dynamic>))
+          .where((WorkshopPhotoItem p) => p.photoUrl != null)
+          .toList(),
     );
   }
 }

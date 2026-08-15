@@ -35,7 +35,14 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     _hasRealLocation = position != null;
     _driverLatitude = position?.latitude ?? LocationService.fallbackLatitude;
     _driverLongitude = position?.longitude ?? LocationService.fallbackLongitude;
-    return WorkshopApi.listNearby(latitude: _driverLatitude, longitude: _driverLongitude);
+    final List<Workshop> nearby = await WorkshopApi.listNearby(
+      latitude: _driverLatitude,
+      longitude: _driverLongitude,
+    );
+    // Even in an emergency, some options beat a dead empty list if nothing
+    // is within normal range.
+    if (nearby.isNotEmpty) return nearby;
+    return WorkshopApi.listAll(fromLatitude: _driverLatitude, fromLongitude: _driverLongitude);
   }
 
   void _showSnack(String message, {bool isError = false}) {

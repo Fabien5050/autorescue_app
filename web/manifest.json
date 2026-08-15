@@ -1,11 +1,11 @@
 {
-    "name": "autorescue_app",
-    "short_name": "autorescue_app",
+    "name": "AutoRescue SW",
+    "short_name": "AutoRescue SW",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FFFFFF",
+    "theme_color": "#1565C0",
+    "description": "AutoRescue SW — roadside assistance, ready anywhere.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

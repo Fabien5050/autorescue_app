@@ -1,12 +1,20 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
+import 'core/app_navigator.dart';
 import 'core/app_theme.dart';
+import 'core/notification_service.dart';
 import 'screens/admin/admin_login_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/splash_screen.dart';
 
-void main() {
+Future<void> main() async {
+  // Mobile-only, same as voice calling — flutter_local_notifications has no
+  // web platform implementation.
+  if (!kIsWeb) {
+    WidgetsFlutterBinding.ensureInitialized();
+    await NotificationService.init();
+  }
   runApp(const AutoRescueApp());
 }
 
@@ -28,6 +36,7 @@ class AutoRescueApp extends StatelessWidget {
     return MaterialApp(
       title: 'AutoRescue SW',
       debugShowCheckedModeBanner: false,
+      navigatorKey: AppNavigator.key,
       theme: AppTheme.light,
       home: isAdminEntry ? const AdminLoginScreen() : const SplashScreen(),
       routes: <String, WidgetBuilder>{

@@ -116,15 +116,29 @@ class _CallScreenState extends State<CallScreen> {
     if (mounted) setState(() => _speakerOn = next);
   }
 
-  Future<void> _endCall() async {
+  /// Pops immediately rather than waiting on Agora's teardown — the
+  /// engine's leaveChannel()/release() calls can hang or throw depending on
+  /// connection state, and none of that should be able to leave the user
+  /// stuck looking at an unresponsive "end call" button. Cleanup happens in
+  /// the background regardless of how it turns out.
+  void _endCall() {
     if (_leaving) return;
     _leaving = true;
     _durationTimer?.cancel();
+    Navigator.of(context).maybePop();
     final RtcEngine? engine = _engine;
     _engine = null;
-    await engine?.leaveChannel();
-    await engine?.release();
-    if (mounted) Navigator.of(context).maybePop();
+    unawaited(_teardownEngine(engine));
+  }
+
+  Future<void> _teardownEngine(RtcEngine? engine) async {
+    if (engine == null) return;
+    try {
+      await engine.leaveChannel();
+      await engine.release();
+    } catch (_) {
+      // Best-effort — the call screen is already closed either way.
+    }
   }
 
   @override
@@ -133,8 +147,7 @@ class _CallScreenState extends State<CallScreen> {
     if (!_leaving) {
       final RtcEngine? engine = _engine;
       _engine = null;
-      engine?.leaveChannel();
-      engine?.release();
+      unawaited(_teardownEngine(engine));
     }
     super.dispose();
   }
@@ -150,9 +163,9 @@ class _CallScreenState extends State<CallScreen> {
     final String? photoUrl = ApiConfig.resolveFileUrl(widget.otherPartyPhotoUrl);
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (bool didPop, Object? _) async {
+      onPopInvokedWithResult: (bool didPop, Object? _) {
         if (didPop) return;
-        await _endCall();
+        _endCall();
       },
       child: Scaffold(
         backgroundColor: AppColors.navy,

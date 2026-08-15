@@ -3,6 +3,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../core/app_colors.dart';
 import '../models/workshop.dart';
+import '../models/workshop_photo.dart';
 import '../widgets/rating_badge.dart';
 
 IconData _iconForService(String service) {
@@ -111,6 +112,19 @@ class WorkshopProfileScreen extends StatelessWidget {
                       _ServiceTile(icon: _iconForService(service), label: service),
                   ],
                 ),
+                if (workshop.photos.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Photos',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.heading,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _PhotoGallery(photos: workshop.photos),
+                ],
                 const SizedBox(height: 20),
                 const Text(
                   'Location Preview',
@@ -158,23 +172,33 @@ class _Hero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final String? coverUrl = workshop.photos.isEmpty ? null : workshop.photos.first.fullPhotoUrl;
     return SizedBox(
       height: 220,
       child: Stack(
         fit: StackFit.expand,
         children: <Widget>[
-          DecoratedBox(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: <Color>[AppColors.navy, Color(0xFF1E3A5F)],
+          if (coverUrl != null)
+            Image.network(
+              coverUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (BuildContext _, Object _, StackTrace? _) => const _HeroFallback(),
+            )
+          else
+            const _HeroFallback(),
+          // Darkens the photo enough that the back/share/favorite buttons
+          // stay legible over whatever's underneath.
+          if (coverUrl != null)
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: <Color>[Colors.black45, Colors.transparent],
+                  stops: <double>[0, 0.4],
+                ),
               ),
             ),
-            child: const Center(
-              child: Icon(Icons.directions_car_filled, size: 90, color: Colors.white24),
-            ),
-          ),
           Positioned(
             top: 44,
             left: 16,
@@ -197,6 +221,26 @@ class _Hero extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _HeroFallback extends StatelessWidget {
+  const _HeroFallback();
+
+  @override
+  Widget build(BuildContext context) {
+    return const DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[AppColors.navy, Color(0xFF1E3A5F)],
+        ),
+      ),
+      child: Center(
+        child: Icon(Icons.directions_car_filled, size: 90, color: Colors.white24),
       ),
     );
   }
@@ -302,6 +346,105 @@ class _ServiceTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Horizontal scroll strip of the workshop's uploaded photos — tapping one
+/// opens it full-screen with swipe-between-photos navigation.
+class _PhotoGallery extends StatelessWidget {
+  const _PhotoGallery({required this.photos});
+
+  final List<WorkshopPhotoItem> photos;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 96,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: photos.length,
+        separatorBuilder: (BuildContext _, int _) => const SizedBox(width: 10),
+        itemBuilder: (BuildContext context, int index) {
+          final String? url = photos[index].fullPhotoUrl;
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              onTap: url == null
+                  ? null
+                  : () => Navigator.of(context).push(MaterialPageRoute<void>(
+                        builder: (BuildContext _) => _PhotoViewer(photos: photos, initialIndex: index),
+                      )),
+              child: SizedBox(
+                width: 96,
+                height: 96,
+                child: url == null
+                    ? const ColoredBox(color: AppColors.badgeSoft)
+                    : Image.network(
+                        url,
+                        fit: BoxFit.cover,
+                        errorBuilder: (BuildContext _, Object _, StackTrace? _) =>
+                            const ColoredBox(color: AppColors.badgeSoft),
+                      ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Full-screen, swipeable photo viewer opened from [_PhotoGallery].
+class _PhotoViewer extends StatefulWidget {
+  const _PhotoViewer({required this.photos, required this.initialIndex});
+
+  final List<WorkshopPhotoItem> photos;
+  final int initialIndex;
+
+  @override
+  State<_PhotoViewer> createState() => _PhotoViewerState();
+}
+
+class _PhotoViewerState extends State<_PhotoViewer> {
+  late final PageController _controller = PageController(initialPage: widget.initialIndex);
+  late int _index = widget.initialIndex;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: Text('${_index + 1} / ${widget.photos.length}'),
+      ),
+      body: PageView.builder(
+        controller: _controller,
+        itemCount: widget.photos.length,
+        onPageChanged: (int i) => setState(() => _index = i),
+        itemBuilder: (BuildContext context, int index) {
+          final String? url = widget.photos[index].fullPhotoUrl;
+          return Center(
+            child: InteractiveViewer(
+              child: url == null
+                  ? const Icon(Icons.broken_image_outlined, color: Colors.white38, size: 64)
+                  : Image.network(
+                      url,
+                      errorBuilder: (BuildContext _, Object _, StackTrace? _) =>
+                          const Icon(Icons.broken_image_outlined, color: Colors.white38, size: 64),
+                    ),
+            ),
+          );
+        },
       ),
     );
   }

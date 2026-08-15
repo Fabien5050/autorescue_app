@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../core/app_colors.dart';
+import '../core/notification_service.dart';
 import '../core/session.dart';
 import '../core/websocket_service.dart';
 import '../models/chat_message.dart';
@@ -36,12 +37,14 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    NotificationService.setOpenChat(widget.requestId);
     _load();
     _sub = WebSocketService.instance.chatMessages.listen(_onIncoming);
   }
 
   @override
   void dispose() {
+    NotificationService.setOpenChat(null);
     _sub?.cancel();
     _controller.dispose();
     _scrollController.dispose();

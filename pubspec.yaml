@@ -66,6 +66,13 @@ dependencies:
   agora_rtc_engine: ^6.5.4
   permission_handler: ^12.0.1
 
+  # Local notifications for new chat messages (tap opens the conversation)
+  # and the sound behind incoming-call ringing (the device's own default
+  # notification sound — no bundled audio asset to license/maintain).
+  flutter_local_notifications: ^19.5.0
+  # Vibration pattern for incoming-call ringing.
+  vibration: ^3.1.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -129,3 +136,8 @@ flutter_launcher_icons:
   remove_alpha_ios: true
   image_path: "assets/images/logo.png"
   min_sdk_android: 21
+  web:
+    generate: true
+    image_path: "assets/images/logo.png"
+    background_color: "#FFFFFF"
+    theme_color: "#1565C0"

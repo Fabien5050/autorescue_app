@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../core/api_config.dart';
 import '../core/app_colors.dart';
+import '../core/notification_service.dart';
+import '../core/ringtone_service.dart';
 import '../models/call_signal.dart';
 import '../models/call_token.dart';
 import '../screens/call_screen.dart';
@@ -34,6 +36,23 @@ class _IncomingCallSheet extends StatefulWidget {
 
 class _IncomingCallSheetState extends State<_IncomingCallSheet> {
   bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    RingtoneService.startRinging();
+    NotificationService.showIncomingCall(
+      requestId: widget.signal.requestId,
+      callerName: widget.signal.callerName,
+    );
+  }
+
+  @override
+  void dispose() {
+    RingtoneService.stopRinging();
+    NotificationService.cancelIncomingCall(widget.signal.requestId);
+    super.dispose();
+  }
 
   Future<void> _accept() async {
     if (_busy) return;

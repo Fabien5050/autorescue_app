@@ -168,6 +168,23 @@ class WorkshopApi {
     await ApiClient.delete('/api/workshops/me/photos/$photoId');
   }
 
+  /// A single workshop's full details — used by the driver to review a
+  /// workshop before calling/messaging its owner on an active request.
+  /// [fromLatitude]/[fromLongitude] are only for the distance label; pass
+  /// the request's own driver coordinates if you have them.
+  static Future<Workshop> getById(
+    int id, {
+    double fromLatitude = 0,
+    double fromLongitude = 0,
+  }) async {
+    final dynamic json = await ApiClient.get('/api/workshops/$id');
+    return Workshop.fromJson(
+      json as Map<String, dynamic>,
+      fromLatitude: fromLatitude,
+      fromLongitude: fromLongitude,
+    );
+  }
+
   /// Nearby workshops for the driver-side SOS screen.
   static Future<List<Workshop>> listNearby({
     required double latitude,
@@ -183,6 +200,27 @@ class WorkshopApi {
             e as Map<String, dynamic>,
             fromLatitude: latitude,
             fromLongitude: longitude,
+          ),
+        )
+        .toList();
+  }
+
+  /// Every approved workshop, unfiltered by distance — the fallback when a
+  /// nearby search comes back empty (driver in an area with no nearby
+  /// coverage yet) so the list/map never just goes dead. Distances are
+  /// computed against [fromLatitude]/[fromLongitude] same as [listNearby],
+  /// they just aren't used to filter which workshops come back.
+  static Future<List<Workshop>> listAll({
+    required double fromLatitude,
+    required double fromLongitude,
+  }) async {
+    final dynamic json = await ApiClient.get('/api/workshops');
+    return (json as List<dynamic>)
+        .map(
+          (dynamic e) => Workshop.fromJson(
+            e as Map<String, dynamic>,
+            fromLatitude: fromLatitude,
+            fromLongitude: fromLongitude,
           ),
         )
         .toList();

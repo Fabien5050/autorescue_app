@@ -5,10 +5,12 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../core/api_client.dart';
 import '../../core/app_colors.dart';
+import '../../core/notification_service.dart';
 import '../../core/websocket_service.dart';
 import '../../models/assistance_request.dart';
 import '../../models/call_signal.dart';
 import '../../models/call_token.dart';
+import '../../models/chat_message.dart';
 import '../../models/notification_message.dart';
 import '../../services/assistance_request_api.dart';
 import '../../services/call_api.dart';
@@ -36,6 +38,7 @@ class _WorkshopRequestsScreenState extends State<WorkshopRequestsScreen> {
   Timer? _liveTrackingTimer;
   StreamSubscription<NotificationMessage>? _notificationSub;
   StreamSubscription<CallSignal>? _callSignalSub;
+  StreamSubscription<ChatMessage>? _chatMessageSub;
 
   @override
   void initState() {
@@ -54,6 +57,7 @@ class _WorkshopRequestsScreenState extends State<WorkshopRequestsScreen> {
     WebSocketService.instance.connect();
     _notificationSub = WebSocketService.instance.notifications.listen(_onNotification);
     _callSignalSub = WebSocketService.instance.callSignals.listen(_onCallSignal);
+    _chatMessageSub = WebSocketService.instance.chatMessages.listen(_onChatMessage);
   }
 
   @override
@@ -61,12 +65,21 @@ class _WorkshopRequestsScreenState extends State<WorkshopRequestsScreen> {
     _liveTrackingTimer?.cancel();
     _notificationSub?.cancel();
     _callSignalSub?.cancel();
+    _chatMessageSub?.cancel();
     super.dispose();
   }
 
   void _onCallSignal(CallSignal signal) {
     if (signal.type != CallSignalType.callInvite || !mounted) return;
     IncomingCallDialog.show(context, signal);
+  }
+
+  void _onChatMessage(ChatMessage message) {
+    NotificationService.showChatMessage(
+      requestId: message.requestId,
+      senderName: message.senderName,
+      content: message.content,
+    );
   }
 
   Future<void> _startCall(AssistanceRequest request) async {
@@ -412,6 +425,8 @@ class _RequestCard extends StatelessWidget {
                     ),
                   ),
                 ] else if (request.status == 'ACCEPTED') ...<Widget>[
+                  _ChatIconButton(onChat: onChat),
+                  const SizedBox(width: 8),
                   _CallIconButton(isCalling: isCalling, onCall: onCall),
                   const SizedBox(width: 10),
                   Expanded(
@@ -422,6 +437,8 @@ class _RequestCard extends StatelessWidget {
                     ),
                   ),
                 ] else if (request.status == 'EN_ROUTE') ...<Widget>[
+                  _ChatIconButton(onChat: onChat),
+                  const SizedBox(width: 8),
                   _CallIconButton(isCalling: isCalling, onCall: onCall),
                   const SizedBox(width: 10),
                   Expanded(
@@ -449,8 +466,8 @@ class _CallIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 44,
-      height: 44,
+      width: 48,
+      height: 48,
       decoration: BoxDecoration(
         color: AppColors.primaryBlue.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(10),
@@ -459,10 +476,34 @@ class _CallIconButton extends StatelessWidget {
           ? const Center(child: SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)))
           : IconButton(
               onPressed: onCall,
-              icon: const Icon(Icons.call, color: AppColors.primaryBlue, size: 20),
+              icon: const Icon(Icons.call, color: AppColors.primaryBlue, size: 22),
               tooltip: 'Call driver',
               visualDensity: VisualDensity.compact,
             ),
+    );
+  }
+}
+
+class _ChatIconButton extends StatelessWidget {
+  const _ChatIconButton({required this.onChat});
+
+  final VoidCallback onChat;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        color: AppColors.accentGreen.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: IconButton(
+        onPressed: onChat,
+        icon: const Icon(Icons.chat_bubble_outline, color: AppColors.accentGreen, size: 21),
+        tooltip: 'Message driver',
+        visualDensity: VisualDensity.compact,
+      ),
     );
   }
 }

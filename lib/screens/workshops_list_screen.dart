@@ -42,10 +42,15 @@ class _WorkshopsListScreenState extends State<WorkshopsListScreen> {
     final (double, double) latLng = await LocationService.getCurrentLatLngOrFallback();
     _myLatitude = latLng.$1;
     _myLongitude = latLng.$2;
-    final List<Workshop> workshops = await WorkshopApi.listNearby(
+    List<Workshop> workshops = await WorkshopApi.listNearby(
       latitude: _myLatitude,
       longitude: _myLongitude,
     );
+    // Nothing within range (e.g. no coverage yet in this area) — fall back
+    // to every approved workshop rather than leaving the list empty.
+    if (workshops.isEmpty) {
+      workshops = await WorkshopApi.listAll(fromLatitude: _myLatitude, fromLongitude: _myLongitude);
+    }
     if (!mounted) return;
     setState(() {
       _workshops = workshops;
