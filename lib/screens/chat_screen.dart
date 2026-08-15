@@ -62,16 +62,31 @@ class _ChatScreenState extends State<ChatScreen> {
         _loading = false;
       });
       _scrollToBottom();
+      ChatApi.markRead(widget.requestId);
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }
 
+  /// Shared by two very different events: a genuinely new message from the
+  /// other party (not yet in the list — appended), and a delivered/read
+  /// receipt update pushed back for a message *this* device already sent
+  /// (same id already in the list — updated in place so its ticks change).
   void _onIncoming(ChatMessage message) {
     if (message.requestId != widget.requestId || !mounted) return;
-    if (_messages.any((ChatMessage m) => m.id == message.id)) return;
-    setState(() => _messages.add(message));
-    _scrollToBottom();
+    final int existingIndex = _messages.indexWhere((ChatMessage m) => m.id == message.id);
+    setState(() {
+      if (existingIndex != -1) {
+        _messages[existingIndex] = message;
+      } else {
+        _messages.add(message);
+      }
+    });
+    if (existingIndex == -1) {
+      _scrollToBottom();
+      // Arrived while this thread is already open — read immediately.
+      ChatApi.markRead(widget.requestId);
+    }
   }
 
   void _scrollToBottom() {
@@ -219,12 +234,21 @@ class _MessageBubble extends StatelessWidget {
               style: TextStyle(color: isMine ? Colors.white : AppColors.primaryText, fontSize: 14),
             ),
             const SizedBox(height: 4),
-            Text(
-              _formatTime(message.sentAt.toLocal()),
-              style: TextStyle(
-                fontSize: 10.5,
-                color: isMine ? Colors.white70 : AppColors.secondaryText,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  _formatTime(message.sentAt.toLocal()),
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    color: isMine ? Colors.white70 : AppColors.secondaryText,
+                  ),
+                ),
+                if (isMine) ...<Widget>[
+                  const SizedBox(width: 4),
+                  _ReceiptTicks(message: message),
+                ],
+              ],
             ),
           ],
         ),
@@ -236,5 +260,25 @@ class _MessageBubble extends StatelessWidget {
     final String hour = dt.hour.toString().padLeft(2, '0');
     final String minute = dt.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
+  }
+}
+
+/// WhatsApp-style receipt ticks on the sender's own messages: one gray
+/// check once sent, two gray checks once the recipient's device has
+/// actually received it, two blue checks once they've opened the thread.
+class _ReceiptTicks extends StatelessWidget {
+  const _ReceiptTicks({required this.message});
+
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    if (message.readAt != null) {
+      return const Icon(Icons.done_all, size: 15, color: Color(0xFF34B7F1));
+    }
+    if (message.deliveredAt != null) {
+      return const Icon(Icons.done_all, size: 15, color: Colors.white70);
+    }
+    return const Icon(Icons.done, size: 15, color: Colors.white70);
   }
 }

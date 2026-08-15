@@ -7,6 +7,7 @@ import '../models/admin_dashboard_summary.dart';
 import '../models/call_signal.dart';
 import '../models/chat_message.dart';
 import '../models/notification_message.dart';
+import '../services/chat_api.dart';
 import 'api_config.dart';
 import 'session.dart';
 
@@ -98,7 +99,15 @@ class WebSocketService {
     final String? body = frame.body;
     if (body == null) return;
     try {
-      _chatMessages.add(ChatMessage.fromJson(jsonDecode(body) as Map<String, dynamic>));
+      final ChatMessage message = ChatMessage.fromJson(jsonDecode(body) as Map<String, dynamic>);
+      _chatMessages.add(message);
+      // This destination carries both genuinely new messages from the
+      // other party and delivered/read receipt updates pushed back to the
+      // original sender — only the former needs an ack, identifiable by
+      // whether this device is actually the recipient.
+      if (message.senderId != Session.instance.userId) {
+        ChatApi.ackDelivered(message.requestId, message.id);
+      }
     } catch (_) {
       // Malformed/unexpected payload — drop it rather than crash the stream.
     }

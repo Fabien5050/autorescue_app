@@ -18,4 +18,16 @@ class ChatApi {
     );
     return ChatMessage.fromJson(json as Map<String, dynamic>);
   }
+
+  /// Called the moment this device actually receives a message over the
+  /// WebSocket — a real delivery confirmation for the sender's ticks.
+  static Future<void> ackDelivered(int requestId, int messageId) async {
+    await ApiClient.post('/api/requests/$requestId/messages/$messageId/delivered', <String, dynamic>{});
+  }
+
+  /// Called when the thread is opened — marks every unread message from
+  /// the other side as read.
+  static Future<void> markRead(int requestId) async {
+    await ApiClient.post('/api/requests/$requestId/messages/read', <String, dynamic>{});
+  }
 }

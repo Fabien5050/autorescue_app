@@ -9,19 +9,15 @@ import '../core/session.dart';
 import '../core/websocket_service.dart';
 import '../models/assistance_request.dart';
 import '../models/call_signal.dart';
-import '../models/call_token.dart';
 import '../models/chat_message.dart';
 import '../models/notification_message.dart';
 import '../models/user_profile.dart';
 import '../models/workshop.dart';
 import '../services/assistance_request_api.dart';
-import '../services/call_api.dart';
 import '../services/user_api.dart';
 import '../services/workshop_api.dart';
 import '../widgets/dashboard_nav_bar.dart';
 import '../widgets/incoming_call_dialog.dart';
-import 'call_screen.dart';
-import 'chat_screen.dart';
 import 'driver_home_map_screen.dart';
 import 'driver_profile_screen.dart';
 import 'settings_screen.dart';
@@ -51,7 +47,6 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
   StreamSubscription<NotificationMessage>? _notificationSub;
   StreamSubscription<CallSignal>? _callSignalSub;
   StreamSubscription<ChatMessage>? _chatMessageSub;
-  bool _startingCall = false;
 
   @override
   void initState() {
@@ -91,41 +86,10 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
     );
   }
 
-  Future<void> _startCall() async {
-    final AssistanceRequest? request = _activeRequest;
-    if (request == null || _startingCall) return;
-    setState(() => _startingCall = true);
-    try {
-      final CallToken token = await CallApi.start(request.id);
-      if (!mounted) return;
-      Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (BuildContext _) => CallScreen(
-          token: token,
-          otherPartyName: request.workshopName ?? 'Workshop',
-        ),
-      ));
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Couldn\'t start the call: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _startingCall = false);
-    }
-  }
-
-  void _openChat() {
-    final AssistanceRequest? request = _activeRequest;
-    if (request == null) return;
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (BuildContext _) => ChatScreen(
-        requestId: request.id,
-        otherPartyName: request.workshopName ?? 'Workshop',
-      ),
-    ));
-  }
-
+  /// Call/message live on the workshop's own profile page now, not as a
+  /// separate bar on this screen — so viewing details is the only entry
+  /// point, and [_isCallable] decides whether that page actually offers
+  /// them (only once the workshop has accepted, not while still pending).
   Future<void> _openWorkshopDetails() async {
     final AssistanceRequest? request = _activeRequest;
     if (request == null || request.workshopId == null) return;
@@ -137,7 +101,10 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
       );
       if (!mounted) return;
       Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (BuildContext _) => WorkshopProfileScreen(workshop: workshop),
+        builder: (BuildContext _) => WorkshopProfileScreen(
+          workshop: workshop,
+          requestId: _isCallable ? request.id : null,
+        ),
       ));
     } catch (e) {
       if (mounted) {
@@ -241,23 +208,7 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
           ),
         ],
       ),
-      // Call/message live right above the bottom nav — the zone of the
-      // screen a thumb actually reaches — instead of tiny icons in the top
-      // status strip, which is what this was before and was flagged as
-      // hard to use.
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          if (_isCallable)
-            _QuickActionsBar(
-              workshopName: _activeRequest!.workshopName ?? 'workshop',
-              isCalling: _startingCall,
-              onCall: _startCall,
-              onChat: _openChat,
-            ),
-          DashboardNavBar(current: _tab, onSelect: _selectTab),
-        ],
-      ),
+      bottomNavigationBar: DashboardNavBar(current: _tab, onSelect: _selectTab),
     );
   }
 }
@@ -311,71 +262,6 @@ class _ActiveRequestBanner extends StatelessWidget {
               ),
             ),
             if (tappable) Icon(Icons.chevron_right, size: 18, color: _statusColor),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Full-width Call/Message bar shown directly above the bottom nav while
-/// there's an active, in-contact request — the most thumb-reachable part
-/// of the screen, and impossible to miss.
-class _QuickActionsBar extends StatelessWidget {
-  const _QuickActionsBar({
-    required this.workshopName,
-    required this.isCalling,
-    required this.onCall,
-    required this.onChat,
-  });
-
-  final String workshopName;
-  final bool isCalling;
-  final VoidCallback onCall;
-  final VoidCallback onChat;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: SafeArea(
-        top: false,
-        bottom: false,
-        child: Row(
-          children: <Widget>[
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: onChat,
-                icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                label: const Text('Message'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primaryBlue,
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: isCalling ? null : onCall,
-                icon: isCalling
-                    ? const SizedBox(
-                        height: 16,
-                        width: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.call, size: 18),
-                label: Text(isCalling ? 'Calling…' : 'Call'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primaryBlue,
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                ),
-              ),
-            ),
           ],
         ),
       ),

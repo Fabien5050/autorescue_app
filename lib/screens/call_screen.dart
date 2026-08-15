@@ -116,16 +116,15 @@ class _CallScreenState extends State<CallScreen> {
     if (mounted) setState(() => _speakerOn = next);
   }
 
-  /// Pops immediately rather than waiting on Agora's teardown — the
-  /// engine's leaveChannel()/release() calls can hang or throw depending on
-  /// connection state, and none of that should be able to leave the user
-  /// stuck looking at an unresponsive "end call" button. Cleanup happens in
-  /// the background regardless of how it turns out.
-  void _endCall() {
+  /// Cancels the timer and hands the engine off to a fire-and-forget
+  /// teardown — leaveChannel()/release() can hang or throw depending on
+  /// connection state, and none of that should be able to block the UI.
+  /// Called from [PopScope]'s callback, never directly from the end-call
+  /// button — that button just pops, same as the system back gesture.
+  void _cleanup() {
     if (_leaving) return;
     _leaving = true;
     _durationTimer?.cancel();
-    Navigator.of(context).maybePop();
     final RtcEngine? engine = _engine;
     _engine = null;
     unawaited(_teardownEngine(engine));
@@ -143,12 +142,9 @@ class _CallScreenState extends State<CallScreen> {
 
   @override
   void dispose() {
-    _durationTimer?.cancel();
-    if (!_leaving) {
-      final RtcEngine? engine = _engine;
-      _engine = null;
-      unawaited(_teardownEngine(engine));
-    }
+    // Safety net in case the widget leaves the tree some other way (e.g. a
+    // parent navigator reset) without PopScope's callback ever firing.
+    _cleanup();
     super.dispose();
   }
 
@@ -162,10 +158,15 @@ class _CallScreenState extends State<CallScreen> {
   Widget build(BuildContext context) {
     final String? photoUrl = ApiConfig.resolveFileUrl(widget.otherPartyPhotoUrl);
     return PopScope(
-      canPop: false,
+      // Always allowed to pop now — cleanup is fire-and-forget and doesn't
+      // need to gate navigation, so there's nothing left to block. Blocking
+      // it was the actual bug: it intercepted the end-call button's own
+      // pop the same way it intercepted the system back gesture, and the
+      // resulting re-entrant call was a silent no-op, so the screen never
+      // closed either way.
+      canPop: true,
       onPopInvokedWithResult: (bool didPop, Object? _) {
-        if (didPop) return;
-        _endCall();
+        if (didPop) _cleanup();
       },
       child: Scaffold(
         backgroundColor: AppColors.navy,
@@ -210,7 +211,7 @@ class _CallScreenState extends State<CallScreen> {
                       icon: Icons.call_end,
                       background: AppColors.dangerRed,
                       large: true,
-                      onTap: _endCall,
+                      onTap: () => Navigator.of(context).pop(),
                     ),
                     _CallControlButton(
                       icon: Icons.volume_up,

@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../core/app_colors.dart';
+import '../models/call_token.dart';
 import '../models/workshop.dart';
 import '../models/workshop_photo.dart';
+import '../services/call_api.dart';
 import '../widgets/rating_badge.dart';
+import 'call_screen.dart';
+import 'chat_screen.dart';
 
 IconData _iconForService(String service) {
   final String s = service.toLowerCase();
@@ -24,14 +28,29 @@ IconData _iconForService(String service) {
 }
 
 /// Full detail page for a single workshop, reached from the map, the
-/// workshops list, or the SOS nearest-workshops list.
-class WorkshopProfileScreen extends StatelessWidget {
-  const WorkshopProfileScreen({super.key, required this.workshop});
+/// workshops list, the SOS nearest-workshops list, or (with [requestId] set)
+/// a driver's active request — that's the only case where voice calling and
+/// chat are actually offered, since they only make sense once paired on a
+/// live request, not while just browsing.
+class WorkshopProfileScreen extends StatefulWidget {
+  const WorkshopProfileScreen({super.key, required this.workshop, this.requestId});
 
   final Workshop workshop;
+  final int? requestId;
 
-  void _call(BuildContext context) {
-    // Hook a real tel: launcher (e.g. url_launcher) in here.
+  @override
+  State<WorkshopProfileScreen> createState() => _WorkshopProfileScreenState();
+}
+
+class _WorkshopProfileScreenState extends State<WorkshopProfileScreen> {
+  bool _startingCall = false;
+
+  Workshop get workshop => widget.workshop;
+
+  void _callPlaceholder(BuildContext context) {
+    // Hook a real tel: launcher (e.g. url_launcher) in here — used only
+    // when browsing without an active request, where real voice calling
+    // isn't available.
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: AppColors.navy,
@@ -41,16 +60,51 @@ class WorkshopProfileScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _startCall() async {
+    final int? requestId = widget.requestId;
+    if (requestId == null || _startingCall) return;
+    setState(() => _startingCall = true);
+    try {
+      final CallToken token = await CallApi.start(requestId);
+      if (!mounted) return;
+      Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (BuildContext _) => CallScreen(token: token, otherPartyName: workshop.name),
+      ));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Couldn\'t start the call: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _startingCall = false);
+    }
+  }
+
+  void _openChat() {
+    final int? requestId = widget.requestId;
+    if (requestId == null) return;
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (BuildContext _) => ChatScreen(requestId: requestId, otherPartyName: workshop.name),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bool canContact = widget.requestId != null;
     return Scaffold(
       backgroundColor: AppColors.background,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _call(context),
-        backgroundColor: AppColors.primaryBlue,
-        icon: const Icon(Icons.call, color: Colors.white),
-        label: const Text('Call Workshop', style: TextStyle(color: Colors.white)),
-      ),
+      floatingActionButton: canContact
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _callPlaceholder(context),
+              backgroundColor: AppColors.primaryBlue,
+              icon: const Icon(Icons.call, color: Colors.white),
+              label: const Text('Call Workshop', style: TextStyle(color: Colors.white)),
+            ),
+      bottomNavigationBar: canContact
+          ? _ContactBar(isCalling: _startingCall, onCall: _startCall, onChat: _openChat)
+          : null,
       body: ListView(
         padding: EdgeInsets.zero,
         children: <Widget>[
@@ -160,6 +214,68 @@ class WorkshopProfileScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Full-width Call/Message bar, shown only when [WorkshopProfileScreen] was
+/// opened from an active request — otherwise this workshop hasn't actually
+/// agreed to anything yet and there's no channel to join.
+class _ContactBar extends StatelessWidget {
+  const _ContactBar({
+    required this.isCalling,
+    required this.onCall,
+    required this.onChat,
+  });
+
+  final bool isCalling;
+  final VoidCallback onCall;
+  final VoidCallback onChat;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      decoration: const BoxDecoration(
+        color: AppColors.card,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: onChat,
+                icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                label: const Text('Message'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primaryBlue,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: isCalling ? null : onCall,
+                icon: isCalling
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.call, size: 18),
+                label: Text(isCalling ? 'Calling…' : 'Call'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

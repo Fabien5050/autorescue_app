@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/api_client.dart';
 import '../../core/app_colors.dart';
+import '../../core/websocket_service.dart';
+import '../../models/chat_message.dart';
+import '../../models/notification_message.dart';
 import '../../services/workshop_api.dart';
 import '../../widgets/workshop_owner_nav_bar.dart';
 import 'workshop_analytics_screen.dart';
@@ -23,14 +28,40 @@ class WorkshopOwnerMain extends StatefulWidget {
 class _WorkshopOwnerMainState extends State<WorkshopOwnerMain> {
   WorkshopOwnerTab _tab = WorkshopOwnerTab.dashboard;
   late Future<void> _loadProfile;
+  bool _hasUnseenActivity = false;
+  StreamSubscription<NotificationMessage>? _notificationSub;
+  StreamSubscription<ChatMessage>? _chatMessageSub;
 
   @override
   void initState() {
     super.initState();
     _loadProfile = WorkshopApi.refreshMyProfile();
+    // WorkshopRequestsScreen also connects/subscribes independently for its
+    // own UI — this is a separate listener purely for the nav-bar badge, so
+    // it still lights up even while a different tab is showing.
+    WebSocketService.instance.connect();
+    _notificationSub = WebSocketService.instance.notifications.listen((NotificationMessage message) {
+      if (message.type == NotificationType.newRequest) _markUnseen();
+    });
+    _chatMessageSub = WebSocketService.instance.chatMessages.listen((_) => _markUnseen());
   }
 
-  void _selectTab(WorkshopOwnerTab tab) => setState(() => _tab = tab);
+  @override
+  void dispose() {
+    _notificationSub?.cancel();
+    _chatMessageSub?.cancel();
+    super.dispose();
+  }
+
+  void _markUnseen() {
+    if (_tab == WorkshopOwnerTab.requests || !mounted) return;
+    setState(() => _hasUnseenActivity = true);
+  }
+
+  void _selectTab(WorkshopOwnerTab tab) => setState(() {
+    _tab = tab;
+    if (tab == WorkshopOwnerTab.requests) _hasUnseenActivity = false;
+  });
 
   void _retry() => setState(() {
     _loadProfile = WorkshopApi.refreshMyProfile();
@@ -79,7 +110,11 @@ class _WorkshopOwnerMainState extends State<WorkshopOwnerMain> {
           );
         },
       ),
-      bottomNavigationBar: WorkshopOwnerNavBar(current: _tab, onSelect: _selectTab),
+      bottomNavigationBar: WorkshopOwnerNavBar(
+        current: _tab,
+        onSelect: _selectTab,
+        requestsBadge: _hasUnseenActivity,
+      ),
     );
   }
 }
