@@ -44,6 +44,17 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            // Strips unused code/resources from the app and every bundled
+            // native plugin (Agora, Google Maps, etc.) — off by default in
+            // Flutter's template, but the single biggest lever for install
+            // size. proguard-rules.pro keeps Agora's native-JNI-reached
+            // classes intact, since R8 can't see those reflection calls.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }

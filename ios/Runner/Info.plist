@@ -32,6 +32,8 @@
 	<string>AutoRescue accesses your photo library so you can upload ID and business documents during registration.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>AutoRescue uses your location to show nearby workshops and to share your position during an emergency assistance request.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>AutoRescue uses your microphone for voice calls with your driver or mechanic during an assistance request.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

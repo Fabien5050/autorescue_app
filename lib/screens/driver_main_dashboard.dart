@@ -7,11 +7,17 @@ import '../core/location_service.dart';
 import '../core/session.dart';
 import '../core/websocket_service.dart';
 import '../models/assistance_request.dart';
+import '../models/call_signal.dart';
+import '../models/call_token.dart';
 import '../models/notification_message.dart';
 import '../models/user_profile.dart';
 import '../services/assistance_request_api.dart';
+import '../services/call_api.dart';
 import '../services/user_api.dart';
 import '../widgets/dashboard_nav_bar.dart';
+import '../widgets/incoming_call_dialog.dart';
+import 'call_screen.dart';
+import 'chat_screen.dart';
 import 'driver_home_map_screen.dart';
 import 'driver_profile_screen.dart';
 import 'settings_screen.dart';
@@ -37,6 +43,8 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
   bool _isPushingLocation = false;
   AssistanceRequest? _activeRequest;
   StreamSubscription<NotificationMessage>? _notificationSub;
+  StreamSubscription<CallSignal>? _callSignalSub;
+  bool _startingCall = false;
 
   @override
   void initState() {
@@ -49,6 +57,7 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
 
     WebSocketService.instance.connect();
     _notificationSub = WebSocketService.instance.notifications.listen(_onNotification);
+    _callSignalSub = WebSocketService.instance.callSignals.listen(_onCallSignal);
     _refreshActiveRequest();
   }
 
@@ -56,7 +65,48 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
   void dispose() {
     _locationTimer?.cancel();
     _notificationSub?.cancel();
+    _callSignalSub?.cancel();
     super.dispose();
+  }
+
+  void _onCallSignal(CallSignal signal) {
+    if (signal.type != CallSignalType.callInvite || !mounted) return;
+    IncomingCallDialog.show(context, signal);
+  }
+
+  Future<void> _startCall() async {
+    final AssistanceRequest? request = _activeRequest;
+    if (request == null || _startingCall) return;
+    setState(() => _startingCall = true);
+    try {
+      final CallToken token = await CallApi.start(request.id);
+      if (!mounted) return;
+      Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (BuildContext _) => CallScreen(
+          token: token,
+          otherPartyName: request.workshopName ?? 'Workshop',
+        ),
+      ));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Couldn\'t start the call: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _startingCall = false);
+    }
+  }
+
+  void _openChat() {
+    final AssistanceRequest? request = _activeRequest;
+    if (request == null) return;
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (BuildContext _) => ChatScreen(
+        requestId: request.id,
+        otherPartyName: request.workshopName ?? 'Workshop',
+      ),
+    ));
   }
 
   Future<AssistanceRequest?> _fetchActiveRequest() async {
@@ -127,7 +177,12 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
     return Scaffold(
       body: Column(
         children: <Widget>[
-          if (_activeRequest != null) _ActiveRequestBanner(request: _activeRequest!),
+          if (_activeRequest != null)
+            _ActiveRequestBanner(
+              request: _activeRequest!,
+              onCall: _startingCall ? null : _startCall,
+              onChat: _openChat,
+            ),
           Expanded(
             child: IndexedStack(
               index: DashboardTab.values.indexOf(_tab),
@@ -153,9 +208,13 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
 /// request — updates instantly on a WebSocket push rather than waiting for
 /// the driver to happen to look at a particular screen.
 class _ActiveRequestBanner extends StatelessWidget {
-  const _ActiveRequestBanner({required this.request});
+  const _ActiveRequestBanner({required this.request, this.onCall, this.onChat});
 
   final AssistanceRequest request;
+  final VoidCallback? onCall;
+  final VoidCallback? onChat;
+
+  bool get _isCallable => request.status == 'ACCEPTED' || request.status == 'EN_ROUTE';
 
   Color get _statusColor => switch (request.status) {
     'PENDING' => AppColors.warningOrange,
@@ -192,6 +251,20 @@ class _ActiveRequestBanner extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          if (_isCallable && onChat != null)
+            IconButton(
+              onPressed: onChat,
+              icon: Icon(Icons.chat_bubble_outline, color: _statusColor, size: 19),
+              tooltip: 'Message ${request.workshopName ?? 'workshop'}',
+              visualDensity: VisualDensity.compact,
+            ),
+          if (_isCallable && onCall != null)
+            IconButton(
+              onPressed: onCall,
+              icon: Icon(Icons.call, color: _statusColor, size: 20),
+              tooltip: 'Call ${request.workshopName ?? 'workshop'}',
+              visualDensity: VisualDensity.compact,
+            ),
         ],
       ),
     );

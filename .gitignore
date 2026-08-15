@@ -43,3 +43,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Native Android Gradle build output (reports, intermediates) — the
+# top-level /build/ rule above only covers Flutter's own build dir, not
+# the android/ subproject's separate one.
+/android/build/
+/android/app/build/

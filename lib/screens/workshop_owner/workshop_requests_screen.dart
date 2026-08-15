@@ -7,8 +7,14 @@ import '../../core/api_client.dart';
 import '../../core/app_colors.dart';
 import '../../core/websocket_service.dart';
 import '../../models/assistance_request.dart';
+import '../../models/call_signal.dart';
+import '../../models/call_token.dart';
 import '../../models/notification_message.dart';
 import '../../services/assistance_request_api.dart';
+import '../../services/call_api.dart';
+import '../../widgets/incoming_call_dialog.dart';
+import '../call_screen.dart';
+import '../chat_screen.dart';
 
 const Set<String> _trackableStatuses = <String>{'PENDING', 'ACCEPTED', 'EN_ROUTE'};
 
@@ -26,8 +32,10 @@ class _WorkshopRequestsScreenState extends State<WorkshopRequestsScreen> {
   late Future<List<AssistanceRequest>> _requestsFuture;
   List<AssistanceRequest> _requests = <AssistanceRequest>[];
   final Set<int> _updatingIds = <int>{};
+  final Set<int> _startingCallIds = <int>{};
   Timer? _liveTrackingTimer;
   StreamSubscription<NotificationMessage>? _notificationSub;
+  StreamSubscription<CallSignal>? _callSignalSub;
 
   @override
   void initState() {
@@ -45,13 +53,52 @@ class _WorkshopRequestsScreenState extends State<WorkshopRequestsScreen> {
     // this screen) already opened the connection this session.
     WebSocketService.instance.connect();
     _notificationSub = WebSocketService.instance.notifications.listen(_onNotification);
+    _callSignalSub = WebSocketService.instance.callSignals.listen(_onCallSignal);
   }
 
   @override
   void dispose() {
     _liveTrackingTimer?.cancel();
     _notificationSub?.cancel();
+    _callSignalSub?.cancel();
     super.dispose();
+  }
+
+  void _onCallSignal(CallSignal signal) {
+    if (signal.type != CallSignalType.callInvite || !mounted) return;
+    IncomingCallDialog.show(context, signal);
+  }
+
+  Future<void> _startCall(AssistanceRequest request) async {
+    if (_startingCallIds.contains(request.id)) return;
+    setState(() => _startingCallIds.add(request.id));
+    try {
+      final CallToken token = await CallApi.start(request.id);
+      if (!mounted) return;
+      Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (BuildContext _) => CallScreen(
+          token: token,
+          otherPartyName: request.driverName,
+        ),
+      ));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Couldn\'t start the call: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _startingCallIds.remove(request.id));
+    }
+  }
+
+  void _openChat(AssistanceRequest request) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (BuildContext _) => ChatScreen(
+        requestId: request.id,
+        otherPartyName: request.driverName,
+      ),
+    ));
   }
 
   /// A new request or a driver-side cancellation — refresh immediately
@@ -171,10 +218,13 @@ class _WorkshopRequestsScreenState extends State<WorkshopRequestsScreen> {
                         return _RequestCard(
                           request: request,
                           isUpdating: _updatingIds.contains(request.id),
+                          isCalling: _startingCallIds.contains(request.id),
                           onAccept: () => _updateStatus(request, AssistanceRequestStatus.accepted),
                           onDecline: () => _updateStatus(request, AssistanceRequestStatus.cancelled),
                           onStartEnRoute: () => _updateStatus(request, AssistanceRequestStatus.enRoute),
                           onComplete: () => _updateStatus(request, AssistanceRequestStatus.completed),
+                          onCall: () => _startCall(request),
+                          onChat: () => _openChat(request),
                         );
                       },
                     ),
@@ -237,18 +287,24 @@ class _RequestCard extends StatelessWidget {
   const _RequestCard({
     required this.request,
     required this.isUpdating,
+    required this.isCalling,
     required this.onAccept,
     required this.onDecline,
     required this.onStartEnRoute,
     required this.onComplete,
+    required this.onCall,
+    required this.onChat,
   });
 
   final AssistanceRequest request;
   final bool isUpdating;
+  final bool isCalling;
   final VoidCallback onAccept;
   final VoidCallback onDecline;
   final VoidCallback onStartEnRoute;
   final VoidCallback onComplete;
+  final VoidCallback onCall;
+  final VoidCallback onChat;
 
   Color get _statusColor => switch (request.status) {
     'PENDING' => AppColors.warningOrange,
@@ -355,15 +411,19 @@ class _RequestCard extends StatelessWidget {
                       child: const Text('Accept'),
                     ),
                   ),
-                ] else if (request.status == 'ACCEPTED')
+                ] else if (request.status == 'ACCEPTED') ...<Widget>[
+                  _CallIconButton(isCalling: isCalling, onCall: onCall),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: FilledButton(
                       onPressed: onStartEnRoute,
                       style: FilledButton.styleFrom(backgroundColor: AppColors.secondaryCyan),
                       child: const Text('Start En Route'),
                     ),
-                  )
-                else if (request.status == 'EN_ROUTE')
+                  ),
+                ] else if (request.status == 'EN_ROUTE') ...<Widget>[
+                  _CallIconButton(isCalling: isCalling, onCall: onCall),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: FilledButton(
                       onPressed: onComplete,
@@ -371,10 +431,38 @@ class _RequestCard extends StatelessWidget {
                       child: const Text('Mark Completed'),
                     ),
                   ),
+                ],
               ],
             ),
         ],
       ),
+    );
+  }
+}
+
+class _CallIconButton extends StatelessWidget {
+  const _CallIconButton({required this.isCalling, required this.onCall});
+
+  final bool isCalling;
+  final VoidCallback onCall;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: AppColors.primaryBlue.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: isCalling
+          ? const Center(child: SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)))
+          : IconButton(
+              onPressed: onCall,
+              icon: const Icon(Icons.call, color: AppColors.primaryBlue, size: 20),
+              tooltip: 'Call driver',
+              visualDensity: VisualDensity.compact,
+            ),
     );
   }
 }
