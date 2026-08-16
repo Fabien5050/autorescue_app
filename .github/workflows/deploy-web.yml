@@ -1,27 +1,24 @@
-name: Deploy web build to GitHub Pages
+name: Deploy web build to Cloudflare Pages
 
-# Builds the Flutter web target and publishes it to GitHub Pages on every
-# push to main, so the app is reachable from a real URL (any device, no
-# emulator/APK needed) without a manual build+upload step each time.
+# Builds the Flutter web target and publishes it to Cloudflare Pages on
+# every push to main, so the app is reachable from a real URL (any device,
+# no emulator/APK needed) without a manual build+upload step each time.
+# Replaced GitHub Pages — same push-to-deploy workflow, faster CDN.
 #
-# One-time setup this workflow depends on: in the repo's Settings > Pages,
-# set Source to "GitHub Actions" (not "Deploy from a branch").
+# One-time setup this workflow depends on:
+#   1. A Cloudflare Pages project named "autorescue-app" (Direct Upload
+#      type — this workflow pushes the build, Cloudflare doesn't need to
+#      know how to build Flutter itself).
+#   2. Two repo secrets (Settings > Secrets and variables > Actions):
+#      CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID, from the Cloudflare
+#      dashboard (My Profile > API Tokens, and the account sidebar).
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
-
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,27 +29,20 @@ jobs:
 
       - run: flutter pub get
 
-      # --base-href must match the repo name since GitHub Pages serves a
-      # project site under /<repo>/, not /. API_BASE_URL points the app at
-      # the hosted backend instead of the localhost default, which no
-      # visitor's browser could reach.
+      # --base-href is "/" (not a repo-name subpath like the old GitHub
+      # Pages setup needed) since Cloudflare Pages serves a project at the
+      # root of its own domain. API_BASE_URL points the app at the hosted
+      # backend instead of the localhost default, which no visitor's
+      # browser could reach.
       - run: |
           flutter build web --release \
-            --base-href "/autorescue_app/" \
+            --base-href "/" \
             --dart-define=API_BASE_URL=https://autorecue-backend.onrender.com
 
-      - uses: actions/configure-pages@v5
-
-      - uses: actions/upload-pages-artifact@v3
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/pages-action@v1
         with:
-          path: build/web
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: autorescue-app
+          directory: build/web

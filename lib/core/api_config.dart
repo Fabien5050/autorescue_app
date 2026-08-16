@@ -9,7 +9,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 /// desktop targets run on the host itself, so `localhost` works directly.
 ///
 /// [_overrideUrl] lets a build point at a different backend without touching
-/// this file — e.g. the GitHub Pages build passes
+/// this file — e.g. the Cloudflare Pages build passes
 /// `--dart-define=API_BASE_URL=https://autorecue-backend.onrender.com` so
 /// the hosted demo can reach the real backend instead of a visitor's own
 /// (nonexistent) localhost:8081. Plain `flutter run` leaves it unset and
