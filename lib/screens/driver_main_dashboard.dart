@@ -18,6 +18,7 @@ import '../services/user_api.dart';
 import '../services/workshop_api.dart';
 import '../widgets/dashboard_nav_bar.dart';
 import '../widgets/incoming_call_dialog.dart';
+import '../widgets/rating_prompt_dialog.dart';
 import 'driver_home_map_screen.dart';
 import 'driver_profile_screen.dart';
 import 'settings_screen.dart';
@@ -44,6 +45,11 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
   Timer? _locationTimer;
   bool _isPushingLocation = false;
   AssistanceRequest? _activeRequest;
+  // In-memory only: this only needs to catch a live COMPLETED transition
+  // while the dashboard is open, not re-prompt for jobs completed in past
+  // sessions (the backend's one-review-per-workshop constraint handles the
+  // rest — see RatingPromptDialog).
+  final Set<int> _ratingPromptedRequestIds = <int>{};
   StreamSubscription<NotificationMessage>? _notificationSub;
   StreamSubscription<CallSignal>? _callSignalSub;
   StreamSubscription<ChatMessage>? _chatMessageSub;
@@ -79,10 +85,14 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
   }
 
   void _onChatMessage(ChatMessage message) {
+    // This channel also carries delivered/read-receipt echoes and deletion
+    // updates for messages *this* device sent — neither is a genuinely new
+    // incoming message, so neither should pop a notification.
+    if (message.senderId == Session.instance.userId || message.isDeleted) return;
     NotificationService.showChatMessage(
       requestId: message.requestId,
       senderName: message.senderName,
-      content: message.content,
+      content: message.previewText,
     );
   }
 
@@ -123,9 +133,34 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
   }
 
   Future<void> _refreshActiveRequest() async {
+    final AssistanceRequest? previous = _activeRequest;
     try {
-      final AssistanceRequest? active = await _fetchActiveRequest();
+      final List<AssistanceRequest> mine = await AssistanceRequestApi.listMine();
+      final AssistanceRequest? active = mine
+          .cast<AssistanceRequest?>()
+          .firstWhere((AssistanceRequest? r) => _activeStatuses.contains(r!.status), orElse: () => null);
       if (mounted) setState(() => _activeRequest = active);
+
+      // The request that was active a moment ago dropped out of the active
+      // set — if that's because a workshop just wrapped the job up (as
+      // opposed to the driver cancelling), that's the moment to ask for a
+      // rating, while the experience is still fresh.
+      if (previous != null && previous.id != active?.id) {
+        final AssistanceRequest? updated = mine
+            .cast<AssistanceRequest?>()
+            .firstWhere((AssistanceRequest? r) => r!.id == previous.id, orElse: () => null);
+        if (updated != null &&
+            updated.status == 'COMPLETED' &&
+            updated.workshopId != null &&
+            _ratingPromptedRequestIds.add(updated.id) &&
+            mounted) {
+          RatingPromptDialog.show(
+            context,
+            workshopId: updated.workshopId!,
+            workshopName: updated.workshopName ?? 'the workshop',
+          );
+        }
+      }
     } catch (_) {
       // Best-effort — the banner just stays as it was.
     }

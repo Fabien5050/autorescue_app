@@ -6,6 +6,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../core/api_client.dart';
 import '../../core/app_colors.dart';
 import '../../core/notification_service.dart';
+import '../../core/session.dart';
 import '../../core/websocket_service.dart';
 import '../../models/assistance_request.dart';
 import '../../models/call_signal.dart';
@@ -75,10 +76,14 @@ class _WorkshopRequestsScreenState extends State<WorkshopRequestsScreen> {
   }
 
   void _onChatMessage(ChatMessage message) {
+    // This channel also carries delivered/read-receipt echoes and deletion
+    // updates for messages *this* device sent — neither is a genuinely new
+    // incoming message, so neither should pop a notification.
+    if (message.senderId == Session.instance.userId || message.isDeleted) return;
     NotificationService.showChatMessage(
       requestId: message.requestId,
       senderName: message.senderName,
-      content: message.content,
+      content: message.previewText,
     );
   }
 
