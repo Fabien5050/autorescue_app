@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
@@ -9,13 +11,9 @@ import 'screens/login_screen.dart';
 import 'screens/splash_screen.dart';
 
 Future<void> main() async {
-  // Mobile-only, same as voice calling — flutter_local_notifications has no
-  // web platform implementation.
-  if (!kIsWeb) {
-    WidgetsFlutterBinding.ensureInitialized();
-    await NotificationService.init();
-  }
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const AutoRescueApp());
+  if (!kIsWeb) unawaited(NotificationService.init());
 }
 
 class AutoRescueApp extends StatelessWidget {

@@ -39,6 +39,17 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         manifestPlaceholders["mapsApiKey"] = mapsApiKey
+
+        // Agora's SDK bundles its own native .so files for every ABI
+        // regardless of `flutter build --target-platform` — that flag only
+        // restricts Flutter's own engine binary. Without this filter, a
+        // single-architecture build still ships all three copies of
+        // Agora's ~20-30MB-per-ABI native library, which is most of this
+        // app's install size. arm64-v8a covers virtually every real device
+        // in use today.
+            ndk {
+                abiFilters += listOf("arm64-v8a", "x86_64")
+        }
     }
 
     buildTypes {
