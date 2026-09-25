@@ -1,6 +1,7 @@
 import '../core/api_client.dart';
 import '../models/admin_analytics.dart';
 import '../models/admin_dashboard_summary.dart';
+import '../models/admin_operations.dart';
 
 class AdminDashboardApi {
   AdminDashboardApi._();
@@ -34,5 +35,24 @@ class AdminDashboardApi {
     await ApiClient.patch('/api/workshops/$workshopId/verify', <String, String>{
       'status': status,
     });
+  }
+
+  static Future<List<AdminVehicle>> getFleet() async {
+    final dynamic json = await ApiClient.get('/api/admin/fleet');
+    return (json as List<dynamic>)
+        .map((dynamic e) => AdminVehicle.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  static Future<AdminReport> getReports() async {
+    final dynamic json = await ApiClient.get('/api/admin/reports/summary');
+    return AdminReport.fromJson(json as Map<String, dynamic>);
+  }
+
+  static Future<List<AdminAuditLog>> getAuditLogs() async {
+    final dynamic json = await ApiClient.get('/api/admin/audit-logs');
+    return (json as List<dynamic>)
+        .map((dynamic e) => AdminAuditLog.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 }
