@@ -29,4 +29,10 @@ class AdminDashboardApi {
     final dynamic json = await ApiClient.get('/api/admin/dashboard/charts/hourly-today');
     return (json as List<dynamic>).map((dynamic e) => HourlyStat.fromJson(e as Map<String, dynamic>)).toList();
   }
+
+  static Future<void> verifyWorkshop(int workshopId, String status) async {
+    await ApiClient.patch('/api/workshops/$workshopId/verify', <String, String>{
+      'status': status,
+    });
+  }
 }

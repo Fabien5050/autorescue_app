@@ -44,6 +44,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     NotificationService.setOpenChat(widget.requestId);
+    NotificationService.markThreadRead(widget.requestId);
     _load();
     _sub = WebSocketService.instance.chatMessages.listen(_onIncoming);
   }
@@ -92,6 +93,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (existingIndex == -1) {
       _scrollToBottom();
       // Arrived while this thread is already open — read immediately.
+      NotificationService.markThreadRead(widget.requestId);
       ChatApi.markRead(widget.requestId);
     }
   }

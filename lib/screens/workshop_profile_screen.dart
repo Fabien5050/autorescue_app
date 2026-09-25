@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../core/app_colors.dart';
+import '../core/notification_service.dart';
 import '../models/call_token.dart';
 import '../models/workshop.dart';
 import '../models/workshop_photo.dart';
@@ -84,6 +85,7 @@ class _WorkshopProfileScreenState extends State<WorkshopProfileScreen> {
   void _openChat() {
     final int? requestId = widget.requestId;
     if (requestId == null) return;
+    NotificationService.markThreadRead(requestId);
     Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (BuildContext _) => ChatScreen(requestId: requestId, otherPartyName: workshop.name),
     ));
@@ -92,6 +94,7 @@ class _WorkshopProfileScreenState extends State<WorkshopProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final bool canContact = widget.requestId != null;
+    final int unreadCount = canContact ? NotificationService.unreadCountForRequest(widget.requestId!) : 0;
     return Scaffold(
       backgroundColor: AppColors.background,
       floatingActionButton: canContact
@@ -103,12 +106,22 @@ class _WorkshopProfileScreenState extends State<WorkshopProfileScreen> {
               label: const Text('Call Workshop', style: TextStyle(color: Colors.white)),
             ),
       bottomNavigationBar: canContact
-          ? _ContactBar(isCalling: _startingCall, onCall: _startCall, onChat: _openChat)
+          ? _ContactBar(
+              isCalling: _startingCall,
+              onCall: _startCall,
+              onChat: _openChat,
+              unreadCount: unreadCount,
+            )
           : null,
       body: ListView(
         padding: EdgeInsets.zero,
         children: <Widget>[
-          _Hero(workshop: workshop),
+          _Hero(
+            workshop: workshop,
+            requestId: widget.requestId,
+            unreadCount: widget.requestId != null ? NotificationService.unreadCountForRequest(widget.requestId!) : 0,
+            onOpenChat: _openChat,
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 16, 18, 90),
             child: Column(
@@ -227,11 +240,13 @@ class _ContactBar extends StatelessWidget {
     required this.isCalling,
     required this.onCall,
     required this.onChat,
+    this.unreadCount = 0,
   });
 
   final bool isCalling;
   final VoidCallback onCall;
   final VoidCallback onChat;
+  final int unreadCount;
 
   @override
   Widget build(BuildContext context) {
@@ -246,12 +261,36 @@ class _ContactBar extends StatelessWidget {
         child: Row(
           children: <Widget>[
             Expanded(
-              child: OutlinedButton.icon(
+              child: FilledButton.icon(
                 onPressed: onChat,
-                icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                icon: Stack(
+                  clipBehavior: Clip.none,
+                  children: <Widget>[
+                    const Icon(Icons.chat_bubble_outline, size: 18),
+                    if (unreadCount > 0)
+                      Positioned(
+                        right: -7,
+                        top: -7,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                          decoration: const BoxDecoration(
+                            color: AppColors.dangerRed,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            unreadCount > 9 ? '9+' : unreadCount.toString(),
+                            style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.w700),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
                 label: const Text('Message'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primaryBlue,
+                style: FilledButton.styleFrom(
+                  backgroundColor: unreadCount > 0 ? AppColors.accentGreen : AppColors.primaryBlue,
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 13),
                 ),
               ),
@@ -282,9 +321,17 @@ class _ContactBar extends StatelessWidget {
 }
 
 class _Hero extends StatelessWidget {
-  const _Hero({required this.workshop});
+  const _Hero({
+    required this.workshop,
+    this.requestId,
+    this.onOpenChat,
+    this.unreadCount = 0,
+  });
 
   final Workshop workshop;
+  final int? requestId;
+  final VoidCallback? onOpenChat;
+  final int unreadCount;
 
   @override
   Widget build(BuildContext context) {
@@ -330,6 +377,14 @@ class _Hero extends StatelessWidget {
             right: 16,
             child: Row(
               children: <Widget>[
+                if (requestId != null && onOpenChat != null)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 10),
+                    child: _HeroNotificationButton(
+                      unreadCount: unreadCount,
+                      onTap: onOpenChat!,
+                    ),
+                  ),
                 _HeroIconButton(icon: Icons.share_outlined, onTap: () {}),
                 const SizedBox(width: 10),
                 _HeroIconButton(icon: Icons.favorite_border, onTap: () {}),
@@ -358,6 +413,53 @@ class _HeroFallback extends StatelessWidget {
       child: Center(
         child: Icon(Icons.directions_car_filled, size: 90, color: Colors.white24),
       ),
+    );
+  }
+}
+
+class _HeroNotificationButton extends StatelessWidget {
+  const _HeroNotificationButton({required this.unreadCount, required this.onTap});
+
+  final int unreadCount;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: <Widget>[
+        Material(
+          color: Colors.black.withValues(alpha: 0.35),
+          shape: const CircleBorder(),
+          child: InkWell(
+            onTap: onTap,
+            customBorder: const CircleBorder(),
+            child: const Padding(
+              padding: EdgeInsets.all(8),
+              child: Icon(Icons.chat_bubble_outline, color: Colors.white, size: 18),
+            ),
+          ),
+        ),
+        if (unreadCount > 0)
+          Positioned(
+            top: -7,
+            right: -7,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+              decoration: const BoxDecoration(
+                color: AppColors.dangerRed,
+                shape: BoxShape.circle,
+                border: Border.fromBorderSide(BorderSide(color: Colors.white, width: 2)),
+              ),
+              child: Text(
+                unreadCount > 9 ? '9+' : unreadCount.toString(),
+                style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.w700),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

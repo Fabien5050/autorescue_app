@@ -30,18 +30,18 @@ class AutoRescueApp extends StatelessWidget {
     // real browser URL the page was loaded with, so the admin entry point
     // is chosen correctly regardless of how Navigator resolves route names.
     final bool isAdminEntry = kIsWeb && Uri.base.fragment.startsWith('/admin');
+    final Widget webHome = const AdminLoginScreen();
 
     return MaterialApp(
       title: 'AutoRescue SW',
       debugShowCheckedModeBanner: false,
       navigatorKey: AppNavigator.key,
       theme: AppTheme.light,
-      home: isAdminEntry ? const AdminLoginScreen() : const SplashScreen(),
+      home: kIsWeb ? webHome : (isAdminEntry ? const AdminLoginScreen() : const SplashScreen()),
       routes: <String, WidgetBuilder>{
         '/login': (BuildContext context) => const LoginScreen(),
-        // Web-only: the admin portal isn't part of the mobile app, and
-        // isn't linked from anywhere in the regular driver/mechanic UI —
-        // reachable only by whoever's been given this URL directly.
+        // Web-only: the admin portal is the only UI exposed in the browser build.
+        // The mobile app remains the regular driver/mechanic experience.
         if (kIsWeb) '/admin': (BuildContext context) => const AdminLoginScreen(),
       },
     );

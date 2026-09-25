@@ -25,4 +25,9 @@ class PaymentApi {
         .map((dynamic e) => Payment.fromJson(e as Map<String, dynamic>))
         .toList();
   }
+
+  static Future<Payment> refresh(int paymentId) async {
+    final dynamic json = await ApiClient.post('/api/payments/$paymentId/refresh', <String, dynamic>{});
+    return Payment.fromJson(json as Map<String, dynamic>);
+  }
 }

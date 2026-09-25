@@ -27,6 +27,10 @@ class NotificationService {
   /// would just be noise.
   static int? _openChatRequestId;
 
+  /// Tracks unread incoming chat messages per request so the app can surface
+  /// a count badge and a visual reminder before the user opens the thread.
+  static final Map<int, int> _unreadMessageCounts = <int, int>{};
+
   static const AndroidNotificationDetails _chatChannel = AndroidNotificationDetails(
     'chat_messages',
     'Chat messages',
@@ -59,7 +63,22 @@ class NotificationService {
     await android?.requestNotificationsPermission();
   }
 
-  static void setOpenChat(int? requestId) => _openChatRequestId = requestId;
+  static void setOpenChat(int? requestId) {
+    _openChatRequestId = requestId;
+    if (requestId != null) {
+      _unreadMessageCounts.remove(requestId);
+    }
+  }
+
+  static bool hasUnreadMessagesForRequest(int requestId) => _unreadMessageCounts.containsKey(requestId);
+
+  static int unreadCountForRequest(int requestId) => _unreadMessageCounts[requestId] ?? 0;
+
+  static void markIncomingMessage(int requestId) {
+    _unreadMessageCounts[requestId] = (unreadCountForRequest(requestId) + 1);
+  }
+
+  static void markThreadRead(int requestId) => _unreadMessageCounts.remove(requestId);
 
   static void _onTap(NotificationResponse response) {
     final String? payload = response.payload;
@@ -80,7 +99,11 @@ class NotificationService {
     required String senderName,
     required String content,
   }) {
-    if (!_initialized || requestId == _openChatRequestId) return Future<void>.value();
+    if (!_initialized || requestId == _openChatRequestId) {
+      if (requestId != _openChatRequestId) markIncomingMessage(requestId);
+      return Future<void>.value();
+    }
+    markIncomingMessage(requestId);
     return _plugin.show(
       requestId,
       senderName,

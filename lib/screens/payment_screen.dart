@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import '../core/app_colors.dart';
+import '../models/payment.dart';
 import '../models/user_role.dart';
 import '../services/payment_api.dart';
 import '../widgets/floating_label_field.dart';
@@ -113,7 +114,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       PaymentMethod.orangeMoney => _orangePhoneController.text.trim(),
       PaymentMethod.card => '',
     };
-    return digits.isEmpty ? null : '+237$digits';
+    return digits.isEmpty ? null : digits.replaceAll(RegExp(r'[^0-9]'), '').replaceFirst(RegExp(r'^237'), '');
   }
 
   Future<void> _submit() async {
@@ -122,13 +123,22 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
     setState(() => _isSubmitting = true);
     try {
-      await PaymentApi.initiate(
+      final Payment payment = await PaymentApi.initiate(
         method: _selectedMethod.wireName,
         purpose: _plan.purpose,
         amount: _plan.amount,
         phoneNumber: _phoneNumberFor(_selectedMethod),
       );
+      Payment latest = payment;
+      for (int attempt = 0; attempt < 30 && latest.status == 'PENDING'; attempt++) {
+        await Future<void>.delayed(const Duration(seconds: 2));
+        latest = await PaymentApi.refresh(payment.id);
+      }
       if (!mounted) return;
+
+      if (latest.status != 'SUCCESS') {
+        throw ApiException('Payment was not completed. Check your mobile-money prompt and try again.');
+      }
 
       if (widget.userRole == UserRole.driver) {
         Navigator.of(context).pushReplacement(

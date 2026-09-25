@@ -89,10 +89,21 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
     // updates for messages *this* device sent — neither is a genuinely new
     // incoming message, so neither should pop a notification.
     if (message.senderId == Session.instance.userId || message.isDeleted) return;
+    NotificationService.markIncomingMessage(message.requestId);
     NotificationService.showChatMessage(
       requestId: message.requestId,
       senderName: message.senderName,
       content: message.previewText,
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.primaryBlue,
+        behavior: SnackBarBehavior.floating,
+        content: Text('New message from ${message.senderName}'),
+        duration: const Duration(seconds: 3),
+      ),
     );
   }
 
