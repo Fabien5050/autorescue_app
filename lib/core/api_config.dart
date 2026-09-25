@@ -5,15 +5,11 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 /// Resolves the AutoRecue backend's base URL for the current platform.
 ///
 /// The Android emulator can't reach the host machine via `localhost` — it
-/// has to go through the special `10.0.2.2` alias instead. Web (Chrome) and
-/// desktop targets run on the host itself, so `localhost` works directly.
+/// has to go through the special `10.0.2.2` alias instead. Web builds use the
+/// deployed backend by default so Chrome testing matches the hosted app.
 ///
 /// [_overrideUrl] lets a build point at a different backend without touching
-/// this file — e.g. the GitHub Pages build passes
-/// `--dart-define=API_BASE_URL=https://autorecue-backend.onrender.com` so
-/// the hosted demo can reach the real backend instead of a visitor's own
-/// (nonexistent) localhost:8081. Plain `flutter run` leaves it unset and
-/// falls back to the platform defaults below.
+/// this file, using `--dart-define=API_BASE_URL=...`.
 class ApiConfig {
   ApiConfig._();
 
@@ -21,7 +17,7 @@ class ApiConfig {
 
   static String get baseUrl {
     if (_overrideUrl.isNotEmpty) return _overrideUrl;
-    if (kIsWeb) return 'http://localhost:8081';
+    if (kIsWeb) return 'https://autorecue-backend.onrender.com';
     if (Platform.isAndroid) return 'http://10.0.2.2:8081';
     return 'http://localhost:8081';
   }
