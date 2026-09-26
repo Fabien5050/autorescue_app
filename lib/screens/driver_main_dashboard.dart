@@ -109,8 +109,8 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
 
   /// Call/message live on the workshop's own profile page now, not as a
   /// separate bar on this screen — so viewing details is the only entry
-  /// point, and [_isCallable] decides whether that page actually offers
-  /// them (only once the workshop has accepted, not while still pending).
+  /// point. The request id is always passed through: the profile page always
+  /// offers Message, and the request's status no longer gates the buttons.
   Future<void> _openWorkshopDetails() async {
     final AssistanceRequest? request = _activeRequest;
     if (request == null || request.workshopId == null) return;
@@ -124,7 +124,7 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
       Navigator.of(context).push(MaterialPageRoute<void>(
         builder: (BuildContext _) => WorkshopProfileScreen(
           workshop: workshop,
-          requestId: _isCallable ? request.id : null,
+          requestId: request.id,
         ),
       ));
     } catch (e) {
@@ -223,10 +223,6 @@ class _DriverMainDashboardState extends State<DriverMainDashboard> {
   }
 
   void _selectTab(DashboardTab tab) => setState(() => _tab = tab);
-
-  bool get _isCallable =>
-      _activeRequest != null &&
-      (_activeRequest!.status == 'ACCEPTED' || _activeRequest!.status == 'EN_ROUTE');
 
   @override
   Widget build(BuildContext context) {

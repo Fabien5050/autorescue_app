@@ -128,7 +128,16 @@ class ApiClient {
   static Future<dynamic> _decode(http.Response response) async {
     final bool ok = response.statusCode >= 200 && response.statusCode < 300;
     final String body = response.body;
-    final dynamic decoded = body.isEmpty ? null : jsonDecode(body);
+    dynamic decoded;
+    if (body.isNotEmpty) {
+      try {
+        decoded = jsonDecode(body);
+      } catch (_) {
+        // Non-JSON body (HTML error page, proxy 502, empty 204 with text,
+        // etc.) — leave [decoded] null so the fallback message is used.
+        decoded = null;
+      }
+    }
 
     if (!ok) {
       final String message = decoded is Map && decoded['message'] is String

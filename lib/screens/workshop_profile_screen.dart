@@ -30,9 +30,8 @@ IconData _iconForService(String service) {
 
 /// Full detail page for a single workshop, reached from the map, the
 /// workshops list, the SOS nearest-workshops list, or (with [requestId] set)
-/// a driver's active request — that's the only case where voice calling and
-/// chat are actually offered, since they only make sense once paired on a
-/// live request, not while just browsing.
+/// a driver's active request. The Message/Call bar is always shown; [requestId]
+/// only decides whether the actions are live or a no-request fallback.
 class WorkshopProfileScreen extends StatefulWidget {
   const WorkshopProfileScreen({super.key, required this.workshop, this.requestId});
 
@@ -84,7 +83,19 @@ class _WorkshopProfileScreenState extends State<WorkshopProfileScreen> {
 
   void _openChat() {
     final int? requestId = widget.requestId;
-    if (requestId == null) return;
+    if (requestId == null) {
+      // No request to thread the conversation onto — the button is always
+      // visible now, so explain why it can't open a thread rather than
+      // silently doing nothing.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.navy,
+          behavior: SnackBarBehavior.floating,
+          content: Text('Request ${workshop.name} first to start a conversation.'),
+        ),
+      );
+      return;
+    }
     NotificationService.markThreadRead(requestId);
     Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (BuildContext _) => ChatScreen(requestId: requestId, otherPartyName: workshop.name),
@@ -93,33 +104,26 @@ class _WorkshopProfileScreenState extends State<WorkshopProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bool canContact = widget.requestId != null;
-    final int unreadCount = canContact ? NotificationService.unreadCountForRequest(widget.requestId!) : 0;
+    final int? requestId = widget.requestId;
+    final int unreadCount = requestId != null ? NotificationService.unreadCountForRequest(requestId) : 0;
     return Scaffold(
       backgroundColor: AppColors.background,
-      floatingActionButton: canContact
-          ? null
-          : FloatingActionButton.extended(
-              onPressed: () => _callPlaceholder(context),
-              backgroundColor: AppColors.primaryBlue,
-              icon: const Icon(Icons.call, color: Colors.white),
-              label: const Text('Call Workshop', style: TextStyle(color: Colors.white)),
-            ),
-      bottomNavigationBar: canContact
-          ? _ContactBar(
-              isCalling: _startingCall,
-              onCall: _startCall,
-              onChat: _openChat,
-              unreadCount: unreadCount,
-            )
-          : null,
+      // Always shown: Message sits beside Call whether or not there's an active
+      // request. With a request the two are real; without one, Call falls back
+      // to the placeholder and Message explains what's needed.
+      bottomNavigationBar: _ContactBar(
+        canCall: requestId != null,
+        isCalling: _startingCall,
+        onCall: () => requestId != null ? _startCall() : _callPlaceholder(context),
+        onChat: _openChat,
+        unreadCount: unreadCount,
+      ),
       body: ListView(
         padding: EdgeInsets.zero,
         children: <Widget>[
           _Hero(
             workshop: workshop,
-            requestId: widget.requestId,
-            unreadCount: widget.requestId != null ? NotificationService.unreadCountForRequest(widget.requestId!) : 0,
+            unreadCount: unreadCount,
             onOpenChat: _openChat,
           ),
           Padding(
@@ -232,17 +236,20 @@ class _WorkshopProfileScreenState extends State<WorkshopProfileScreen> {
   }
 }
 
-/// Full-width Call/Message bar, shown only when [WorkshopProfileScreen] was
-/// opened from an active request — otherwise this workshop hasn't actually
-/// agreed to anything yet and there's no channel to join.
+/// Full-width Message/Call bar, always visible at the bottom of the workshop
+/// details page. [canCall] is false when the page was opened without an active
+/// request, in which case the Call button degrades to the placeholder instead
+/// of silently doing nothing.
 class _ContactBar extends StatelessWidget {
   const _ContactBar({
+    required this.canCall,
     required this.isCalling,
     required this.onCall,
     required this.onChat,
     this.unreadCount = 0,
   });
 
+  final bool canCall;
   final bool isCalling;
   final VoidCallback onCall;
   final VoidCallback onChat;
@@ -298,7 +305,7 @@ class _ContactBar extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: FilledButton.icon(
-                onPressed: isCalling ? null : onCall,
+                onPressed: !canCall || isCalling ? null : onCall,
                 icon: isCalling
                     ? const SizedBox(
                         height: 16,
@@ -323,14 +330,12 @@ class _ContactBar extends StatelessWidget {
 class _Hero extends StatelessWidget {
   const _Hero({
     required this.workshop,
-    this.requestId,
-    this.onOpenChat,
+    required this.onOpenChat,
     this.unreadCount = 0,
   });
 
   final Workshop workshop;
-  final int? requestId;
-  final VoidCallback? onOpenChat;
+  final VoidCallback onOpenChat;
   final int unreadCount;
 
   @override
@@ -377,14 +382,13 @@ class _Hero extends StatelessWidget {
             right: 16,
             child: Row(
               children: <Widget>[
-                if (requestId != null && onOpenChat != null)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 10),
-                    child: _HeroNotificationButton(
-                      unreadCount: unreadCount,
-                      onTap: onOpenChat!,
-                    ),
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: _HeroNotificationButton(
+                    unreadCount: unreadCount,
+                    onTap: onOpenChat,
                   ),
+                ),
                 _HeroIconButton(icon: Icons.share_outlined, onTap: () {}),
                 const SizedBox(width: 10),
                 _HeroIconButton(icon: Icons.favorite_border, onTap: () {}),
