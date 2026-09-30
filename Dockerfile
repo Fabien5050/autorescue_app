@@ -1,5 +1,5 @@
-# Stage 1: Build Flutter Web
-FROM ghcr.io/cirrusci/flutter:stable AS build
+# Stage 1: Build Flutter Web using public Docker Hub image
+FROM mobiledevops/flutter:3.24.3 AS build
 
 WORKDIR /app
 COPY pubspec.yaml pubspec.lock ./
