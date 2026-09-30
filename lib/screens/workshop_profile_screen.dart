@@ -88,9 +88,6 @@ class _WorkshopProfileScreenState extends State<WorkshopProfileScreen> {
       if (mounted) setState(() => _startingCall = false);
     }
   }
-      if (mounted) setState(() => _startingCall = false);
-    }
-  }
 
   void _openChat() {
     final int? requestId = widget.requestId;
@@ -663,11 +660,6 @@ class _PhotoViewerState extends State<_PhotoViewer> {
           final String? url = widget.photos[index].fullPhotoUrl;
           return Center(
             child: InteractiveViewer(
-              // Pan disabled so a single-finger/mouse drag stays free for the
-              // enclosing PageView to swipe between photos — InteractiveViewer
-              // otherwise wins that gesture and pans the image in place
-              // instead. Pinch-to-zoom (scale) still works since that needs a
-              // second pointer, which doesn't conflict with PageView's swipe.
               panEnabled: false,
               child: url == null
                   ? const Icon(Icons.broken_image_outlined, color: Colors.white38, size: 64)
