@@ -289,7 +289,12 @@ class _EmergencyButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Icon(Icons.emergency_share, color: Colors.white, size: 18),
+              Image(
+                image: AssetImage('assets/images/logo.png'),
+                width: 22,
+                height: 22,
+                fit: BoxFit.contain,
+              ),
               SizedBox(width: 8),
               Text(
                 'EMERGENCY HELP',

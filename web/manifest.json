@@ -1,11 +1,11 @@
 {
-    "name": "AutoRescue SW",
-    "short_name": "AutoRescue SW",
+    "name": "Autorescue",
+    "short_name": "Autorescue",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
     "theme_color": "#1565C0",
-    "description": "AutoRescue SW — roadside assistance, ready anywhere.",
+    "description": "Autorescue — roadside assistance, ready anywhere.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
 import '../../models/admin_operations.dart';
 import '../../services/admin_dashboard_api.dart';
+import '../../widgets/admin_error_state.dart';
 
 class AdminAuditLogsScreen extends StatefulWidget {
   const AdminAuditLogsScreen({super.key});
@@ -20,7 +21,11 @@ class _AdminAuditLogsScreenState extends State<AdminAuditLogsScreen> {
     _load();
   }
 
-  void _load() => setState(() => _future = AdminDashboardApi.getAuditLogs());
+  void _load() {
+    setState(() {
+      _future = AdminDashboardApi.getAuditLogs();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +34,7 @@ class _AdminAuditLogsScreenState extends State<AdminAuditLogsScreen> {
         future: _future,
         builder: (BuildContext context, AsyncSnapshot<List<AdminAuditLog>> snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          if (snapshot.hasError) return _AuditError(message: snapshot.error.toString(), onRetry: _load);
+          if (snapshot.hasError) return AdminErrorState(message: adminErrorMessage(snapshot.error), onRetry: _load);
           final List<AdminAuditLog> logs = snapshot.data ?? <AdminAuditLog>[];
           return Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
             Padding(padding: const EdgeInsets.fromLTRB(24, 24, 24, 8), child: Row(children: <Widget>[const Expanded(child: Text('Audit Logs', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.navy))), IconButton(onPressed: _load, tooltip: 'Refresh', icon: const Icon(Icons.refresh_rounded))])),
@@ -47,12 +52,4 @@ class _AdminAuditLogsScreenState extends State<AdminAuditLogsScreen> {
   IconData _iconFor(String type) => switch (type) { 'PAYMENT' => Icons.payments_outlined, 'REQUEST' => Icons.support_agent_outlined, _ => Icons.storefront_outlined };
   Color _colorFor(String status) => switch (status) { 'SUCCESS' || 'COMPLETED' || 'APPROVED' => AppColors.success, 'FAILED' || 'CANCELLED' || 'REJECTED' => AppColors.dangerRed, _ => AppColors.warningOrange };
   String _date(DateTime value) => '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year} ${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
-}
-
-class _AuditError extends StatelessWidget {
-  const _AuditError({required this.message, required this.onRetry});
-  final String message;
-  final VoidCallback onRetry;
-  @override
-  Widget build(BuildContext context) => Center(child: Column(mainAxisSize: MainAxisSize.min, children: <Widget>[Text(message, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.slate)), const SizedBox(height: 12), FilledButton(onPressed: onRetry, child: const Text('Retry'))]));
 }

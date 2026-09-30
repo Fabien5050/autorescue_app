@@ -5,6 +5,7 @@ import '../core/app_colors.dart';
 import '../core/session.dart';
 import '../models/user_role.dart';
 import '../services/auth_api.dart';
+import '../widgets/brand_logo.dart';
 import '../widgets/labeled_text_field.dart';
 import '../widgets/primary_button.dart';
 import '../widgets/role_card.dart';
@@ -221,32 +222,17 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-/// Orange SOS badge next to the wordmark.
+/// AutoRescue logo next to the wordmark.
 class _Header extends StatelessWidget {
   const _Header();
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return const Row(
       children: <Widget>[
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: AppColors.orange,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: const Text(
-            'SOS',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        const Text(
+        BrandLogo(size: 26),
+        SizedBox(width: 8),
+        Text(
           'AutoRescue',
           style: TextStyle(
             fontSize: 18,

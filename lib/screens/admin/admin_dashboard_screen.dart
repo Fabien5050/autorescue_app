@@ -2,13 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../core/api_client.dart';
 import '../../core/app_colors.dart';
 import '../../core/websocket_service.dart';
 import '../../models/admin_analytics.dart';
 import '../../models/admin_dashboard_summary.dart';
 import '../../services/admin_dashboard_api.dart';
 import '../../widgets/admin_charts.dart';
+import '../../widgets/admin_error_state.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key, required this.onReviewRequested});
@@ -45,7 +45,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       // The hourly chart is the one piece the brief calls out as
       // real-time — refetch it on the same 30s cadence the summary
       // pushes arrive on, rather than a separate timer.
-      setState(() => _hourlyFuture = AdminDashboardApi.getHourlyToday());
+      setState(() {
+        _hourlyFuture = AdminDashboardApi.getHourlyToday();
+      });
     });
   }
 
@@ -85,10 +87,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   return const _StatTilesShimmer();
                 }
                 if (snapshot.hasError) {
-                  final String message = snapshot.error is ApiException
-                      ? (snapshot.error! as ApiException).message
-                      : 'Failed to load dashboard data.';
-                  return _RetryBlock(message: message, onRetry: _refresh);
+                  return _RetryBlock(message: adminErrorMessage(snapshot.error), onRetry: _refresh);
                 }
 
                 final AdminDashboardSummary summary = _liveSummary ?? snapshot.data!;
@@ -183,8 +182,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  String _errorMessage(Object? error) =>
-      error is ApiException ? error.message : 'Failed to load chart data.';
+  String _errorMessage(Object? error) => adminErrorMessage(error);
 }
 
 class _RetryBlock extends StatelessWidget {
@@ -310,7 +308,7 @@ class _StatTilesRow extends StatelessWidget {
       runSpacing: 16,
       children: <Widget>[
         _StatTile(
-          icon: Icons.sos_outlined,
+          imageAsset: 'assets/images/logo.png',
           iconColor: AppColors.dangerRed,
           iconBg: const Color(0xFFFDECEC),
           label: 'Active Requests',
@@ -355,15 +353,19 @@ class _StatTilesRow extends StatelessWidget {
 
 class _StatTile extends StatelessWidget {
   const _StatTile({
-    required this.icon,
+    this.icon,
     required this.iconColor,
     required this.iconBg,
     required this.label,
     required this.value,
     this.badge,
+    this.imageAsset,
   });
 
-  final IconData icon;
+  /// Either a Material [icon] or an app-image [imageAsset] — the app logo
+  /// stands in for the old SOS glyph on the requests tile.
+  final IconData? icon;
+  final String? imageAsset;
   final Color iconColor;
   final Color iconBg;
   final String label;
@@ -390,7 +392,9 @@ class _StatTile extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)),
-                child: Icon(icon, size: 20, color: iconColor),
+                child: imageAsset != null
+                    ? Image(image: AssetImage(imageAsset!), width: 26, height: 26, fit: BoxFit.contain)
+                    : Icon(icon, size: 20, color: iconColor),
               ),
               ?badge,
             ],

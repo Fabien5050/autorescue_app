@@ -4,6 +4,7 @@ import '../../core/api_client.dart';
 import '../../core/app_colors.dart';
 import '../../core/session.dart';
 import '../../services/admin_auth_api.dart';
+import '../../widgets/brand_logo.dart';
 import '../../widgets/labeled_text_field.dart';
 import '../../widgets/primary_button.dart';
 import 'admin_forgot_password_screen.dart';
@@ -250,21 +251,11 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return const Row(
       children: <Widget>[
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: AppColors.orange,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: const Text(
-            'SOS',
-            style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 0.5),
-          ),
-        ),
-        const SizedBox(width: 8),
-        const Text(
+        BrandLogo(size: 26),
+        SizedBox(width: 8),
+        Text(
           'AutoRescue',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.navy),
         ),

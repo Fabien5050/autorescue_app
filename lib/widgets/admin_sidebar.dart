@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../core/session.dart';
 import '../models/user_profile.dart';
+import 'brand_logo.dart';
 
 enum AdminTab {
   dashboard(Icons.dashboard_outlined, Icons.dashboard, 'Dashboard'),
@@ -72,23 +73,13 @@ class _SidebarHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(20, 16, 20, 16),
       child: Row(
         children: <Widget>[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.orange,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: const Text(
-              'SOS',
-              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.5),
-            ),
-          ),
-          const SizedBox(width: 8),
-          const Expanded(
+          BrandLogo(size: 24),
+          SizedBox(width: 8),
+          Expanded(
             child: Text(
               'AutoRescue',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.navy),

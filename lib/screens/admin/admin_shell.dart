@@ -31,6 +31,18 @@ class _AdminShellState extends State<AdminShell> {
   AdminTab _tab = AdminTab.dashboard;
   UserProfile? _profile;
 
+  /// Tabs are built lazily, on first visit, and then kept alive.
+  ///
+  /// The shell used to build all six up front in an [IndexedStack]. Every
+  /// tab fetches in its own `initState`, so signing in fired ~10 HTTP calls
+  /// at the same instant (profile + 5 dashboard queries + fleet + reports +
+  /// audit logs + the verification tab's own summary). Against a single
+  /// backend that burst starves the earliest requests — they time out or get
+  /// dropped, and whichever lose the race render as a failed-to-fetch error
+  /// on a tab the admin may not even be looking at. Building on demand keeps
+  /// at most the dashboard's own fan-out in flight at any moment.
+  final Set<AdminTab> _builtTabs = <AdminTab>{AdminTab.dashboard};
+
   @override
   void initState() {
     super.initState();
@@ -41,21 +53,35 @@ class _AdminShellState extends State<AdminShell> {
     }).catchError((Object _) {});
   }
 
-  void _selectTab(AdminTab tab) => setState(() => _tab = tab);
+  void _selectTab(AdminTab tab) => setState(() {
+    _tab = tab;
+    _builtTabs.add(tab);
+  });
 
   void _onProfileChanged(UserProfile profile) => setState(() => _profile = profile);
 
   @override
   Widget build(BuildContext context) {
+    // [IndexedStack] keeps every child alive so tab state survives switching,
+    // but only tabs that have actually been visited get a child — an
+    // unvisited tab contributes an empty box rather than mounting (and
+    // immediately fetching from) a screen nobody is looking at.
     final Widget content = IndexedStack(
       index: AdminTab.values.indexOf(_tab),
       children: <Widget>[
-        AdminDashboardScreen(onReviewRequested: () => _selectTab(AdminTab.mechanicVerification)),
-        const AdminFleetManagementScreen(),
-        const AdminMechanicVerificationScreen(),
-        const AdminReportsScreen(),
-        const AdminAuditLogsScreen(),
-        AdminSettingsScreen(onProfileChanged: _onProfileChanged),
+        for (final AdminTab tab in AdminTab.values)
+          if (!_builtTabs.contains(tab))
+            const SizedBox.shrink()
+          else
+            switch (tab) {
+              AdminTab.dashboard =>
+                AdminDashboardScreen(onReviewRequested: () => _selectTab(AdminTab.mechanicVerification)),
+              AdminTab.fleetManagement => const AdminFleetManagementScreen(),
+              AdminTab.mechanicVerification => const AdminMechanicVerificationScreen(),
+              AdminTab.reports => const AdminReportsScreen(),
+              AdminTab.auditLogs => const AdminAuditLogsScreen(),
+              AdminTab.settings => AdminSettingsScreen(onProfileChanged: _onProfileChanged),
+            },
       ],
     );
 

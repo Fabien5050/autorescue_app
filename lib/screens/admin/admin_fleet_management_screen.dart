@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
 import '../../models/admin_operations.dart';
 import '../../services/admin_dashboard_api.dart';
+import '../../widgets/admin_error_state.dart';
 
 class AdminFleetManagementScreen extends StatefulWidget {
   const AdminFleetManagementScreen({super.key});
@@ -20,7 +21,11 @@ class _AdminFleetManagementScreenState extends State<AdminFleetManagementScreen>
     _load();
   }
 
-  void _load() => setState(() => _future = AdminDashboardApi.getFleet());
+  void _load() {
+    setState(() {
+      _future = AdminDashboardApi.getFleet();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +48,7 @@ class _AdminFleetManagementScreenState extends State<AdminFleetManagementScreen>
               future: _future,
               builder: (BuildContext context, AsyncSnapshot<List<AdminVehicle>> snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-                if (snapshot.hasError) return _ErrorState(message: snapshot.error.toString(), onRetry: _load);
+                if (snapshot.hasError) return AdminErrorState(message: adminErrorMessage(snapshot.error), onRetry: _load);
                 final List<AdminVehicle> vehicles = snapshot.data ?? <AdminVehicle>[];
                 if (vehicles.isEmpty) return const Center(child: Text('No registered vehicles found.', style: TextStyle(color: AppColors.slate)));
                 return ListView.separated(
@@ -73,12 +78,4 @@ class _AdminFleetManagementScreenState extends State<AdminFleetManagementScreen>
       ),
     );
   }
-}
-
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.message, required this.onRetry});
-  final String message;
-  final VoidCallback onRetry;
-  @override
-  Widget build(BuildContext context) => Center(child: Column(mainAxisSize: MainAxisSize.min, children: <Widget>[Text(message, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.slate)), const SizedBox(height: 12), FilledButton(onPressed: onRetry, child: const Text('Retry'))]));
 }

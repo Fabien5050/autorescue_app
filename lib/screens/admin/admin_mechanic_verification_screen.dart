@@ -26,11 +26,11 @@ class _AdminMechanicVerificationScreenState extends State<AdminMechanicVerificat
     _refresh();
   }
 
-  void _refresh() {
+  void _refresh([bool forceRemote = false]) {
     setState(() {
-      _pendingFuture = widget.initialApplications == null
-          ? AdminDashboardApi.getSummary().then((summary) => summary.recentApplications)
-          : Future<List<AdminWorkshopSummary>>.value(widget.initialApplications!);
+      _pendingFuture = (!forceRemote && widget.initialApplications != null)
+          ? Future<List<AdminWorkshopSummary>>.value(widget.initialApplications!)
+          : AdminDashboardApi.getSummary().then((summary) => summary.recentApplications);
     });
   }
 
@@ -46,7 +46,7 @@ class _AdminMechanicVerificationScreenState extends State<AdminMechanicVerificat
           ),
         ),
       );
-      _refresh();
+      _refresh(true);
     } catch (error) {
       if (!mounted) return;
       final String message = error is Exception ? error.toString() : 'Unable to update workshop status.';
@@ -93,7 +93,7 @@ class _AdminMechanicVerificationScreenState extends State<AdminMechanicVerificat
                           const SizedBox(height: 12),
                           Text(message, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.slate)),
                           const SizedBox(height: 12),
-                          FilledButton(onPressed: _refresh, child: const Text('Retry')),
+                          FilledButton(onPressed: () => _refresh(true), child: const Text('Retry')),
                         ],
                       ),
                     ),
@@ -115,7 +115,7 @@ class _AdminMechanicVerificationScreenState extends State<AdminMechanicVerificat
                 }
 
                 return RefreshIndicator(
-                  onRefresh: () async => _refresh(),
+                  onRefresh: () async => _refresh(true),
                   child: ListView.separated(
                     padding: const EdgeInsets.all(24),
                     itemCount: applications.length,

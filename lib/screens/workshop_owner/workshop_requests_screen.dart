@@ -15,6 +15,7 @@ import '../../models/chat_message.dart';
 import '../../models/notification_message.dart';
 import '../../services/assistance_request_api.dart';
 import '../../services/call_api.dart';
+import '../../services/missed_call_service.dart';
 import '../../widgets/incoming_call_dialog.dart';
 import '../call_screen.dart';
 import '../chat_screen.dart';
@@ -115,6 +116,42 @@ class _WorkshopRequestsScreenState extends State<WorkshopRequestsScreen> {
       builder: (BuildContext _) => ChatScreen(
         requestId: request.id,
         otherPartyName: request.driverName,
+      ),
+    ));
+  }
+
+  Future<void> _startCallByName(int requestId, String callerName) async {
+    try {
+      final CallToken token = await CallApi.start(requestId);
+      if (!mounted) return;
+      Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (BuildContext _) => CallScreen(
+          token: token,
+          otherPartyName: callerName,
+        ),
+      ));
+    } catch (_) {
+      if (!mounted) return;
+      final CallToken fallbackToken = CallToken(
+        appId: '1f10928230b3438096f4dd71a1fa9300',
+        channel: 'request_$requestId',
+        token: '',
+        uid: 0,
+      );
+      Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (BuildContext _) => CallScreen(
+          token: fallbackToken,
+          otherPartyName: callerName,
+        ),
+      ));
+    }
+  }
+
+  void _openChatByName(int requestId, String callerName) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (BuildContext _) => ChatScreen(
+        requestId: requestId,
+        otherPartyName: callerName,
       ),
     ));
   }
@@ -223,28 +260,33 @@ class _WorkshopRequestsScreenState extends State<WorkshopRequestsScreen> {
                       ),
                     );
                   }
-                  if (_requests.isEmpty) return _EmptyState(onRefresh: _refresh);
-
                   return RefreshIndicator(
                     onRefresh: _refresh,
-                    child: ListView.separated(
+                    child: ListView(
                       padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
-                      itemCount: _requests.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 10),
-                      itemBuilder: (BuildContext context, int index) {
-                        final AssistanceRequest request = _requests[index];
-                        return _RequestCard(
-                          request: request,
-                          isUpdating: _updatingIds.contains(request.id),
-                          isCalling: _startingCallIds.contains(request.id),
-                          onAccept: () => _updateStatus(request, AssistanceRequestStatus.accepted),
-                          onDecline: () => _updateStatus(request, AssistanceRequestStatus.cancelled),
-                          onStartEnRoute: () => _updateStatus(request, AssistanceRequestStatus.enRoute),
-                          onComplete: () => _updateStatus(request, AssistanceRequestStatus.completed),
-                          onCall: () => _startCall(request),
-                          onChat: () => _openChat(request),
-                        );
-                      },
+                      children: <Widget>[
+                        _MissedCallsSection(
+                          onCall: _startCallByName,
+                          onChat: _openChatByName,
+                        ),
+                        if (_requests.isEmpty)
+                          _EmptyState(onRefresh: _refresh)
+                        else
+                          for (final AssistanceRequest request in _requests) ...<Widget>[
+                            _RequestCard(
+                              request: request,
+                              isUpdating: _updatingIds.contains(request.id),
+                              isCalling: _startingCallIds.contains(request.id),
+                              onAccept: () => _updateStatus(request, AssistanceRequestStatus.accepted),
+                              onDecline: () => _updateStatus(request, AssistanceRequestStatus.cancelled),
+                              onStartEnRoute: () => _updateStatus(request, AssistanceRequestStatus.enRoute),
+                              onComplete: () => _updateStatus(request, AssistanceRequestStatus.completed),
+                              onCall: () => _startCall(request),
+                              onChat: () => _openChat(request),
+                            ),
+                            const SizedBox(height: 10),
+                          ],
+                      ],
                     ),
                   );
                 },
@@ -510,5 +552,110 @@ class _ChatIconButton extends StatelessWidget {
         visualDensity: VisualDensity.compact,
       ),
     );
+  }
+}
+
+class _MissedCallsSection extends StatelessWidget {
+  const _MissedCallsSection({required this.onCall, required this.onChat});
+
+  final void Function(int requestId, String callerName) onCall;
+  final void Function(int requestId, String callerName) onChat;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<List<MissedCall>>(
+      valueListenable: MissedCallService.instance.missedCalls,
+      builder: (BuildContext context, List<MissedCall> missedList, Widget? _) {
+        if (missedList.isEmpty) return const SizedBox.shrink();
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.dangerRed.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.dangerRed.withValues(alpha: 0.3)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  const Icon(Icons.phone_missed, color: AppColors.dangerRed, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Missed Calls (${missedList.length})',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.dangerRed,
+                    ),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => MissedCallService.instance.clearAll(),
+                    child: const Text('Clear All', style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              for (final MissedCall call in missedList) ...<Widget>[
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: AppColors.badgeSoft,
+                        child: Text(
+                          call.callerName.isNotEmpty ? call.callerName[0].toUpperCase() : '?',
+                          style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primaryBlue),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              call.callerName,
+                              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.heading),
+                            ),
+                            Text(
+                              'Missed call at ${_formatTime(call.timestamp)}',
+                              style: const TextStyle(fontSize: 11.5, color: AppColors.secondaryText),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.chat_bubble_outline, color: AppColors.accentGreen, size: 20),
+                        tooltip: 'Send message',
+                        onPressed: () => onChat(call.requestId, call.callerName),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.call, color: AppColors.primaryBlue, size: 20),
+                        tooltip: 'Call back',
+                        onPressed: () => onCall(call.requestId, call.callerName),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _formatTime(DateTime time) {
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
   }
 }

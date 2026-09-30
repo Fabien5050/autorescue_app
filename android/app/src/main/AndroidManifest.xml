@@ -14,7 +14,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <application
-        android:label="autorescue_app"
+        android:label="Autorescue"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
         <!-- From a Google Cloud project with "Maps SDK for Android" enabled
