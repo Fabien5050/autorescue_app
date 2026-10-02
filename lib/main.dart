@@ -21,10 +21,12 @@ class AutoRescueApp extends StatelessWidget {
 
   static bool get _isAdminRoute {
     if (!kIsWeb) return false;
-    final String fullUrl = Uri.base.toString().toLowerCase();
-    final String fragment = Uri.base.fragment.toLowerCase();
-    final String path = Uri.base.path.toLowerCase();
-    return fragment.contains('admin') || path.endsWith('/admin') || path.endsWith('/admin/') || fullUrl.contains('/admin');
+    final String fragment = Uri.base.fragment.toLowerCase().trim();
+    final String path = Uri.base.path.toLowerCase().trim();
+    return fragment.startsWith('/admin') ||
+           fragment == 'admin' ||
+           path.endsWith('/admin') ||
+           path.endsWith('/admin/');
   }
 
   @override
