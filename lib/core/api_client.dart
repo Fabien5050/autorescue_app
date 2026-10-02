@@ -60,7 +60,13 @@ class ApiClient {
   /// upload, which resolves to a `StreamedResponse` rather than a `Response`.
   static Future<T> _send<T>(Future<T> Function() request) async {
     try {
-      return await request();
+      return await request().timeout(
+        const Duration(seconds: 45),
+        onTimeout: () => throw ApiException(
+          'Server response timed out. The backend server may be spinning up — please try again in a few seconds.',
+          isNetworkError: true,
+        ),
+      );
     } on ApiException {
       rethrow;
     } catch (e) {
