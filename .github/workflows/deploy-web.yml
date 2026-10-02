@@ -38,6 +38,7 @@ jobs:
       # visitor's browser could reach.
       - run: |
           flutter build web --release \
+            --web-renderer auto \
             --base-href "/autorescue_app/" \
             --dart-define=API_BASE_URL=https://autorecue-backend.onrender.com
 
