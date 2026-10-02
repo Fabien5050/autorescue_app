@@ -42,7 +42,7 @@ class _AdminMechanicVerificationScreenState extends State<AdminMechanicVerificat
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            status == 'APPROVED' ? 'Workshop approved.' : 'Workshop rejected.',
+            status == 'APPROVED' ? 'Workshop approved successfully!' : 'Workshop application rejected.',
           ),
         ),
       );
@@ -66,11 +66,21 @@ class _AdminMechanicVerificationScreenState extends State<AdminMechanicVerificat
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Padding(
-            padding: EdgeInsets.fromLTRB(24, 24, 24, 8),
-            child: Text(
-              'Pending workshop applications',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.navy),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                const Text(
+                  'Pending Workshop Applications',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.navy),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh, color: AppColors.primaryBlue),
+                  onPressed: () => _refresh(true),
+                  tooltip: 'Refresh list',
+                ),
+              ],
             ),
           ),
           Expanded(
@@ -106,9 +116,9 @@ class _AdminMechanicVerificationScreenState extends State<AdminMechanicVerificat
                     child: Padding(
                       padding: EdgeInsets.all(24),
                       child: Text(
-                        'No pending workshop applications.',
+                        'No pending workshop applications at this time.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 16, color: AppColors.slate),
+                        style: TextStyle(fontSize: 15, color: AppColors.slate),
                       ),
                     ),
                   );
@@ -132,7 +142,7 @@ class _AdminMechanicVerificationScreenState extends State<AdminMechanicVerificat
                           side: const BorderSide(color: AppColors.border),
                         ),
                         child: Padding(
-                          padding: const EdgeInsets.all(18),
+                          padding: const EdgeInsets.all(20),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
@@ -145,50 +155,132 @@ class _AdminMechanicVerificationScreenState extends State<AdminMechanicVerificat
                                       children: <Widget>[
                                         Text(
                                           workshop.name,
-                                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.navy),
+                                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.navy),
                                         ),
+                                        if (workshop.ownerName != null && workshop.ownerName!.isNotEmpty) ...<Widget>[
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: <Widget>[
+                                              const Icon(Icons.person_outline, size: 15, color: AppColors.primaryBlue),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                'Owner: ${workshop.ownerName}',
+                                                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.navy),
+                                              ),
+                                              if (workshop.phone != null && workshop.phone!.isNotEmpty) ...<Widget>[
+                                                const SizedBox(width: 12),
+                                                const Icon(Icons.phone_outlined, size: 14, color: AppColors.slate),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  workshop.phone!,
+                                                  style: const TextStyle(fontSize: 13, color: AppColors.slate),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ],
                                         const SizedBox(height: 6),
-                                        Text(
-                                          workshop.address ?? 'No address provided',
-                                          style: const TextStyle(color: AppColors.slate),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          'Submitted ${_formatDate(workshop.createdAt)}',
-                                          style: const TextStyle(fontSize: 12, color: AppColors.slate),
+                                        Row(
+                                          children: <Widget>[
+                                            const Icon(Icons.location_on_outlined, size: 15, color: AppColors.slate),
+                                            const SizedBox(width: 6),
+                                            Expanded(
+                                              child: Text(
+                                                workshop.address ?? 'No address provided',
+                                                style: const TextStyle(fontSize: 13, color: AppColors.slate),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
                                   ),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                     decoration: BoxDecoration(
-                                      color: AppColors.blueSoft,
-                                      borderRadius: BorderRadius.circular(999),
+                                      color: AppColors.warningSoft,
+                                      borderRadius: BorderRadius.circular(20),
                                     ),
                                     child: const Text(
-                                      'Pending',
-                                      style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.blue),
+                                      'Pending Review',
+                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.warningOrange),
                                     ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 18),
+                              if ((workshop.nationalIdNumber != null && workshop.nationalIdNumber!.isNotEmpty) ||
+                                  (workshop.taxIdNumber != null && workshop.taxIdNumber!.isNotEmpty)) ...<Widget>[
+                                const SizedBox(height: 12),
+                                const Divider(height: 1, color: AppColors.border),
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 16,
+                                  runSpacing: 6,
+                                  children: <Widget>[
+                                    if (workshop.nationalIdNumber != null && workshop.nationalIdNumber!.isNotEmpty)
+                                      Text(
+                                        'National ID: ${workshop.nationalIdNumber}',
+                                        style: const TextStyle(fontSize: 12.5, color: AppColors.slate),
+                                      ),
+                                    if (workshop.taxIdNumber != null && workshop.taxIdNumber!.isNotEmpty)
+                                      Text(
+                                        'Tax / Business ID: ${workshop.taxIdNumber}',
+                                        style: const TextStyle(fontSize: 12.5, color: AppColors.slate),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                              if (workshop.services.isNotEmpty) ...<Widget>[
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: <Widget>[
+                                    for (final String service in workshop.services)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.badgeSoft,
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          service,
+                                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.primaryBlue),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                              const SizedBox(height: 12),
+                              Text(
+                                'Submitted: ${_formatDate(workshop.createdAt)}',
+                                style: const TextStyle(fontSize: 12, color: AppColors.slateLight),
+                              ),
+                              const SizedBox(height: 16),
                               Row(
                                 children: <Widget>[
                                   Expanded(
                                     child: FilledButton.icon(
                                       onPressed: updating ? null : () => _handleDecision(workshop.id, 'APPROVED'),
-                                      icon: const Icon(Icons.check_rounded),
-                                      label: Text(updating ? 'Approving...' : 'Approve'),
+                                      icon: const Icon(Icons.check_circle_outline, size: 18),
+                                      label: Text(updating ? 'Approving...' : 'Approve Workshop'),
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: AppColors.accentGreen,
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: OutlinedButton.icon(
                                       onPressed: updating ? null : () => _handleDecision(workshop.id, 'REJECTED'),
-                                      icon: const Icon(Icons.close_rounded),
-                                      label: Text(updating ? 'Rejecting...' : 'Reject'),
+                                      icon: const Icon(Icons.cancel_outlined, size: 18),
+                                      label: Text(updating ? 'Rejecting...' : 'Reject Application'),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: AppColors.dangerRed,
+                                        side: const BorderSide(color: AppColors.dangerRed),
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -209,6 +301,6 @@ class _AdminMechanicVerificationScreenState extends State<AdminMechanicVerificat
   }
 
   String _formatDate(DateTime value) {
-    return '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+    return '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year} ${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
   }
 }

@@ -2,14 +2,24 @@ class AdminWorkshopSummary {
   const AdminWorkshopSummary({
     required this.id,
     required this.name,
+    this.ownerName,
+    this.phone,
+    this.nationalIdNumber,
+    this.taxIdNumber,
     required this.address,
+    this.services = const <String>[],
     required this.verificationStatus,
     required this.createdAt,
   });
 
   final int id;
   final String name;
+  final String? ownerName;
+  final String? phone;
+  final String? nationalIdNumber;
+  final String? taxIdNumber;
   final String? address;
+  final List<String> services;
   final String verificationStatus;
   final DateTime createdAt;
 
@@ -17,7 +27,12 @@ class AdminWorkshopSummary {
     return AdminWorkshopSummary(
       id: json['id'] as int,
       name: json['name'] as String,
+      ownerName: json['ownerName'] as String?,
+      phone: json['phone'] as String?,
+      nationalIdNumber: json['nationalIdNumber'] as String?,
+      taxIdNumber: json['taxIdNumber'] as String?,
       address: json['address'] as String?,
+      services: (json['services'] as List<dynamic>?)?.map((dynamic e) => e.toString()).toList() ?? <String>[],
       verificationStatus: json['verificationStatus'] as String,
       createdAt: DateTime.parse(json['createdAt'] as String),
     );
@@ -48,9 +63,10 @@ class AdminDashboardSummary {
       pendingVerifications: json['pendingVerifications'] as int,
       totalUsers: json['totalUsers'] as int,
       resolvedToday: json['resolvedToday'] as int,
-      recentApplications: (json['recentApplications'] as List<dynamic>)
-          .map((dynamic e) => AdminWorkshopSummary.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      recentApplications: (json['recentApplications'] as List<dynamic>?)
+              ?.map((dynamic e) => AdminWorkshopSummary.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          <AdminWorkshopSummary>[],
     );
   }
 }

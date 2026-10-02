@@ -23,8 +23,8 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Pending workshop applications'), findsOneWidget);
+    expect(find.text('Pending Workshop Applications'), findsOneWidget);
     expect(find.text('Buea Auto Care'), findsOneWidget);
-    expect(find.text('Approve'), findsOneWidget);
+    expect(find.text('Approve Workshop'), findsOneWidget);
   });
 }
