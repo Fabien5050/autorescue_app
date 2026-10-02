@@ -5,9 +5,11 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/api_client.dart';
 import '../core/app_colors.dart';
 import '../core/location_service.dart';
+import '../models/call_token.dart';
 import '../models/workshop.dart';
 import '../services/assistance_request_api.dart';
 import '../services/workshop_api.dart';
+import 'call_screen.dart';
 
 /// SOS tab: fastest path to sharing location and calling the nearest help.
 class EmergencySosScreen extends StatefulWidget {
@@ -88,7 +90,21 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
 
   void _callContact(String label, String phoneNumber) => _dial(phoneNumber, label);
 
-  void _callWorkshop(Workshop workshop) => _dial(workshop.phone, workshop.name);
+  void _callWorkshop(Workshop workshop) {
+    final CallToken token = CallToken(
+      appId: '1f10928230b3438096f4dd71a1fa9300',
+      channel: 'workshop_${workshop.id}',
+      token: '',
+      uid: 0,
+    );
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (BuildContext _) => CallScreen(
+        token: token,
+        otherPartyName: workshop.name,
+        otherPartyPhotoUrl: workshop.photos.isNotEmpty ? workshop.photos.first.fullPhotoUrl : null,
+      ),
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
