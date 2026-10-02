@@ -396,7 +396,7 @@ class _StatTile extends StatelessWidget {
                     ? Image(image: AssetImage(imageAsset!), width: 26, height: 26, fit: BoxFit.contain)
                     : Icon(icon, size: 20, color: iconColor),
               ),
-              ?badge,
+              if (badge != null) badge!,
             ],
           ),
           const SizedBox(height: 16),

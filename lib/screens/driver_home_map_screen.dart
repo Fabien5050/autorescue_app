@@ -144,7 +144,7 @@ class _DriverHomeMapScreenState extends State<DriverHomeMapScreen> {
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       itemCount: _filterCategories.length,
-                      separatorBuilder: (_, _) => const SizedBox(width: 8),
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
                       itemBuilder: (BuildContext context, int index) {
                         final String category = _filterCategories[index];
                         final bool selected = category == _activeFilter;

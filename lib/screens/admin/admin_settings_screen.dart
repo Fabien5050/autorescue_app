@@ -445,7 +445,7 @@ class _AvatarPicker extends StatelessWidget {
                   ? Image.network(
                       profile.fullProfilePhotoUrl!,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => const Icon(Icons.person, color: AppColors.primaryBlue, size: 40),
+                      errorBuilder: (_, __, ___) => const Icon(Icons.person, color: AppColors.primaryBlue, size: 40),
                     )
                   : const Icon(Icons.person, color: AppColors.primaryBlue, size: 40),
         ),

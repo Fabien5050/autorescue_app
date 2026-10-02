@@ -217,7 +217,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                         ? Image.network(
                             profile.fullProfilePhotoUrl!,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) =>
+                            errorBuilder: (_, __, ___) =>
                                 const Icon(Icons.person, color: AppColors.primaryBlue, size: 36),
                           )
                         : const Icon(Icons.person, color: AppColors.primaryBlue, size: 36),

@@ -119,7 +119,7 @@ class _AdminMechanicVerificationScreenState extends State<AdminMechanicVerificat
                   child: ListView.separated(
                     padding: const EdgeInsets.all(24),
                     itemCount: applications.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 16),
+                    separatorBuilder: (_, __) => const SizedBox(height: 16),
                     itemBuilder: (BuildContext context, int index) {
                       final AdminWorkshopSummary workshop = applications[index];
                       final bool updating = _updatingIds.contains(workshop.id);

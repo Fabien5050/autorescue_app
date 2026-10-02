@@ -216,7 +216,7 @@ class _ChatScreenState extends State<ChatScreen> {
         child: InteractiveViewer(
           child: Image.network(
             url,
-            errorBuilder: (BuildContext _, Object _, StackTrace? _) =>
+            errorBuilder: (BuildContext _, Object __, StackTrace? ___) =>
                 const Icon(Icons.broken_image_outlined, color: Colors.white38, size: 64),
           ),
         ),
@@ -476,7 +476,7 @@ class _MessageContent extends StatelessWidget {
           width: 200,
           height: 200,
           fit: BoxFit.cover,
-          errorBuilder: (BuildContext _, Object _, StackTrace? _) => Container(
+          errorBuilder: (BuildContext _, Object __, StackTrace? ___) => Container(
             width: 200,
             height: 200,
             color: AppColors.badgeSoft,

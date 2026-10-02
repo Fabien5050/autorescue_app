@@ -156,7 +156,7 @@ class _WorkshopOwnerProfileScreenState extends State<WorkshopOwnerProfileScreen>
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       itemCount: _profile.photos.length,
-                      separatorBuilder: (_, _) => const SizedBox(width: 10),
+                      separatorBuilder: (_, __) => const SizedBox(width: 10),
                       itemBuilder: (BuildContext context, int index) {
                         final WorkshopPhotoItem photo = _profile.photos[index];
                         return SizedBox(

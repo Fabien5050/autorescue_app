@@ -102,7 +102,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
               child: ListView.separated(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
                 itemCount: payments.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
                 itemBuilder: (BuildContext context, int index) => _PaymentCard(payment: payments[index]),
               ),
             );

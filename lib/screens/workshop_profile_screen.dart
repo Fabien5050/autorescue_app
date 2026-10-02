@@ -352,7 +352,7 @@ class _Hero extends StatelessWidget {
             Image.network(
               coverUrl,
               fit: BoxFit.cover,
-              errorBuilder: (BuildContext _, Object _, StackTrace? _) => const _HeroFallback(),
+              errorBuilder: (BuildContext _, Object __, StackTrace? ___) => const _HeroFallback(),
             )
           else
             const _HeroFallback(),
@@ -590,7 +590,7 @@ class _PhotoGallery extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: photos.length,
-        separatorBuilder: (BuildContext _, int _) => const SizedBox(width: 10),
+        separatorBuilder: (BuildContext _, int __) => const SizedBox(width: 10),
         itemBuilder: (BuildContext context, int index) {
           final String? url = photos[index].fullPhotoUrl;
           return ClipRRect(
@@ -609,7 +609,7 @@ class _PhotoGallery extends StatelessWidget {
                     : Image.network(
                         url,
                         fit: BoxFit.cover,
-                        errorBuilder: (BuildContext _, Object _, StackTrace? _) =>
+                        errorBuilder: (BuildContext _, Object __, StackTrace? ___) =>
                             const ColoredBox(color: AppColors.badgeSoft),
                       ),
               ),
@@ -665,7 +665,7 @@ class _PhotoViewerState extends State<_PhotoViewer> {
                   ? const Icon(Icons.broken_image_outlined, color: Colors.white38, size: 64)
                   : Image.network(
                       url,
-                      errorBuilder: (BuildContext _, Object _, StackTrace? _) =>
+                      errorBuilder: (BuildContext _, Object __, StackTrace? ___) =>
                           const Icon(Icons.broken_image_outlined, color: Colors.white38, size: 64),
                     ),
             ),

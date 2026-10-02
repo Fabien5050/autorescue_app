@@ -416,7 +416,7 @@ class _ProfileTabState extends State<_ProfileTab> {
                             ? Image.network(
                                 photoUrl,
                                 fit: BoxFit.cover,
-                                errorBuilder: (BuildContext _, Object _, StackTrace? _) =>
+                                errorBuilder: (BuildContext _, Object __, StackTrace? ___) =>
                                     const Icon(Icons.person, color: AppColors.primaryBlue, size: 28),
                               )
                             : const Icon(Icons.person, color: AppColors.primaryBlue, size: 28),

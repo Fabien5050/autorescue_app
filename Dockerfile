@@ -18,6 +18,7 @@ RUN curl -O https://storage.googleapis.com/flutter_infra_release/releases/stable
 
 ENV PATH="/opt/flutter/bin:${PATH}"
 
+RUN git config --global --add safe.directory /opt/flutter
 RUN flutter config --enable-web
 
 WORKDIR /app

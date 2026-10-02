@@ -210,7 +210,7 @@ class _WorkshopServicesScreenState extends State<WorkshopServicesScreen> {
                   : ListView.separated(
                       padding: const EdgeInsets.fromLTRB(18, 14, 18, 90),
                       itemCount: _services.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 10),
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
                       itemBuilder: (BuildContext context, int index) {
                         final WorkshopService service = _services[index];
                         return ServiceManagementCard(
