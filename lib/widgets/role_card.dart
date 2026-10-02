@@ -26,6 +26,7 @@ class RoleCard extends StatelessWidget {
       selected: selected,
       label: '$title. $subtitle',
       child: AnimatedContainer(
+        width: double.infinity,
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOut,
         decoration: BoxDecoration(
