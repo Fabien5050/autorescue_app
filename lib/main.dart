@@ -19,21 +19,24 @@ Future<void> main() async {
 class AutoRescueApp extends StatelessWidget {
   const AutoRescueApp({super.key});
 
+  static bool get _isAdminRoute {
+    if (!kIsWeb) return false;
+    final String fullUrl = Uri.base.toString().toLowerCase();
+    final String fragment = Uri.base.fragment.toLowerCase();
+    final String path = Uri.base.path.toLowerCase();
+    return fragment.contains('admin') || path.endsWith('/admin') || path.endsWith('/admin/') || fullUrl.contains('/admin');
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Detects whether browser URL points to the admin portal path or fragment (#/admin).
-    final bool isAdminEntry = kIsWeb && (
-      Uri.base.fragment.startsWith('/admin') ||
-      Uri.base.path.endsWith('/admin') ||
-      Uri.base.path.endsWith('/admin/')
-    );
+    final bool isAdmin = _isAdminRoute;
 
     return MaterialApp(
       title: 'AutoRescue SW',
       debugShowCheckedModeBanner: false,
       navigatorKey: AppNavigator.key,
       theme: AppTheme.light,
-      home: isAdminEntry ? const AdminLoginScreen() : const SplashScreen(),
+      home: isAdmin ? const AdminLoginScreen() : const SplashScreen(),
       routes: <String, WidgetBuilder>{
         '/login': (BuildContext context) => const LoginScreen(),
         '/admin': (BuildContext context) => const AdminLoginScreen(),
