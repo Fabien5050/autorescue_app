@@ -59,10 +59,12 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   }
 
   Future<void> _requestAssistance(Workshop workshop, {String? description}) async {
-    setState(() => _requestingWorkshopIds.add(workshop.id));
+    if (workshop.id == null) return;
+    final int workshopId = workshop.id!;
+    setState(() => _requestingWorkshopIds.add(workshopId));
     try {
       final AssistanceRequest request = await AssistanceRequestApi.create(
-        workshopId: workshop.id,
+        workshopId: workshopId,
         driverLatitude: _driverLatitude,
         driverLongitude: _driverLongitude,
         description: description,
@@ -334,7 +336,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                             urgent: i == 0,
                             isBusy: _requestingWorkshopIds.contains(nearby[i].id),
                             onCall: () => _callWorkshop(nearby[i]),
-                            onRequest: () => _showRequestModal(nearby[i]),
+                            onRequest: () => _showSelectWorkshopSheet(nearby),
                           ),
                           if (i != nearby.length - 1) const SizedBox(height: 10),
                         ],

@@ -1,8 +1,5 @@
 import 'package:flutter/foundation.dart';
 
-import '../models/notification_message.dart';
-import 'missed_call_service.dart';
-
 class WorkshopNotificationItem {
   const WorkshopNotificationItem({
     required this.id,
