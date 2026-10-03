@@ -126,13 +126,21 @@ class AuthApi {
   }
 
   static void _applySession(Map<String, dynamic> json) {
+    final dynamic rawUserId = json['userId'];
+    final dynamic rawWorkshopId = json['workshopId'];
+
+    final int userId = rawUserId is num ? rawUserId.toInt() : int.parse(rawUserId.toString());
+    final int? workshopId = rawWorkshopId == null
+        ? null
+        : (rawWorkshopId is num ? rawWorkshopId.toInt() : int.tryParse(rawWorkshopId.toString()));
+
     Session.instance.update(
-      token: json['token'] as String,
-      userId: json['userId'] as int,
-      fullName: json['fullName'] as String,
-      email: json['email'] as String,
-      role: json['role'] as String,
-      workshopId: json['workshopId'] as int?,
+      token: json['token'].toString(),
+      userId: userId,
+      fullName: json['fullName']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      role: json['role']?.toString() ?? '',
+      workshopId: workshopId,
     );
   }
 }

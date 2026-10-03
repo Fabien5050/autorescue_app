@@ -39,13 +39,21 @@ class AdminAuthApi {
       'code': code,
     });
     final Map<String, dynamic> map = json as Map<String, dynamic>;
+    final dynamic rawUserId = map['userId'];
+    final dynamic rawWorkshopId = map['workshopId'];
+
+    final int userId = rawUserId is num ? rawUserId.toInt() : int.parse(rawUserId.toString());
+    final int? workshopId = rawWorkshopId == null
+        ? null
+        : (rawWorkshopId is num ? rawWorkshopId.toInt() : int.tryParse(rawWorkshopId.toString()));
+
     Session.instance.update(
-      token: map['token'] as String,
-      userId: map['userId'] as int,
-      fullName: map['fullName'] as String,
-      email: map['email'] as String,
-      role: map['role'] as String,
-      workshopId: map['workshopId'] as int?,
+      token: map['token'].toString(),
+      userId: userId,
+      fullName: map['fullName']?.toString() ?? '',
+      email: map['email']?.toString() ?? '',
+      role: map['role']?.toString() ?? '',
+      workshopId: workshopId,
     );
   }
 }

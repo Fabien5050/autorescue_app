@@ -68,13 +68,16 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       Navigator.of(context).push(
         MaterialPageRoute<void>(builder: (_) => AdminOtpScreen(email: email)),
       );
-    } on ApiException catch (error) {
+    } catch (error) {
       if (!mounted) return;
+      final String message = error is ApiException
+          ? error.displayMessage
+          : 'Admin sign-in failed. Please check your credentials and try again.';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFFDC2626),
           behavior: SnackBarBehavior.floating,
-          content: Text(error.message),
+          content: Text(message),
         ),
       );
     } finally {

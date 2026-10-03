@@ -89,13 +89,16 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
       }
-    } on ApiException catch (error) {
+    } catch (error) {
       if (!mounted) return;
+      final String message = error is ApiException
+          ? error.displayMessage
+          : 'Sign-in failed. Please check your credentials and connection.';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFFDC2626),
           behavior: SnackBarBehavior.floating,
-          content: Text(error.message),
+          content: Text(message),
         ),
       );
     } finally {
