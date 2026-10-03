@@ -7,6 +7,7 @@ import '../../core/app_colors.dart';
 import '../../core/websocket_service.dart';
 import '../../models/chat_message.dart';
 import '../../models/notification_message.dart';
+import '../../services/missed_call_service.dart';
 import '../../services/workshop_api.dart';
 import '../../widgets/workshop_owner_nav_bar.dart';
 import 'workshop_analytics_screen.dart';
@@ -44,10 +45,18 @@ class _WorkshopOwnerMainState extends State<WorkshopOwnerMain> {
       if (message.type == NotificationType.newRequest) _markUnseen();
     });
     _chatMessageSub = WebSocketService.instance.chatMessages.listen((_) => _markUnseen());
+    MissedCallService.instance.missedCalls.addListener(_onMissedCallsChanged);
+  }
+
+  void _onMissedCallsChanged() {
+    if (MissedCallService.instance.missedCalls.value.isNotEmpty) {
+      _markUnseen();
+    }
   }
 
   @override
   void dispose() {
+    MissedCallService.instance.missedCalls.removeListener(_onMissedCallsChanged);
     _notificationSub?.cancel();
     _chatMessageSub?.cancel();
     super.dispose();

@@ -10,6 +10,7 @@ import '../../services/workshop_api.dart';
 import '../settings_screen.dart';
 import '../../widgets/availability_status_pill.dart';
 import '../../widgets/stat_card.dart';
+import '../../widgets/workshop_notification_button.dart';
 
 /// "Dashboard" tab — header, quick stats, and an availability toggle. This
 /// is the workshop owner's landing screen after signing in.
@@ -227,12 +228,7 @@ class _Header extends StatelessWidget {
             ],
           ),
         ),
-        IconButton(
-          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(behavior: SnackBarBehavior.floating, content: Text('No new notifications')),
-          ),
-          icon: const Icon(Icons.notifications_none, color: AppColors.primaryText),
-        ),
+        const WorkshopNotificationButton(),
         IconButton(
           onPressed: () => Navigator.of(context).push(
             MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
