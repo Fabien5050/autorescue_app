@@ -70,6 +70,45 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     _fetchAll();
   });
 
+  Future<void> _confirmClearRequests() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('Clear All Live Requests?'),
+        content: const Text(
+          'Are you sure you want to permanently clear all current assistance requests from the database?',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.dangerRed),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Clear All'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      try {
+        await AdminDashboardApi.clearAllRequests();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('All live requests cleared successfully.')),
+        );
+        _refresh();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to clear requests: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -78,7 +117,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            _DashboardHeader(onRefresh: _refresh),
+            _DashboardHeader(
+              onRefresh: _refresh,
+              onClearRequests: _confirmClearRequests,
+            ),
             const SizedBox(height: 22),
             FutureBuilder<AdminDashboardSummary>(
               future: _summaryFuture,
@@ -255,9 +297,10 @@ class _ChartCard extends StatelessWidget {
 }
 
 class _DashboardHeader extends StatelessWidget {
-  const _DashboardHeader({required this.onRefresh});
+  const _DashboardHeader({required this.onRefresh, required this.onClearRequests});
 
   final VoidCallback onRefresh;
+  final VoidCallback onClearRequests;
 
   @override
   Widget build(BuildContext context) {
@@ -280,6 +323,18 @@ class _DashboardHeader extends StatelessWidget {
             ],
           ),
         ),
+        OutlinedButton.icon(
+          onPressed: onClearRequests,
+          icon: const Icon(Icons.delete_outline, size: 17, color: AppColors.dangerRed),
+          label: const Text('Clear Requests', style: TextStyle(color: AppColors.dangerRed, fontWeight: FontWeight.w700)),
+          style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: AppColors.dangerRed),
+            backgroundColor: AppColors.card,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+        const SizedBox(width: 10),
         OutlinedButton.icon(
           onPressed: onRefresh,
           icon: const Icon(Icons.refresh, size: 17, color: AppColors.primaryBlue),

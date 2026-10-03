@@ -37,6 +37,10 @@ class AdminDashboardApi {
     });
   }
 
+  static Future<void> clearAllRequests() async {
+    await ApiClient.delete('/api/admin/requests/clear-all');
+  }
+
   static Future<List<AdminVehicle>> getFleet() async {
     try {
       final dynamic json = await ApiClient.get('/api/admin/fleet');
