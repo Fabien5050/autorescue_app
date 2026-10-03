@@ -16,6 +16,7 @@ import '../../models/notification_message.dart';
 import '../../services/assistance_request_api.dart';
 import '../../services/call_api.dart';
 import '../../services/missed_call_service.dart';
+import '../../services/workshop_notification_service.dart';
 import '../../widgets/incoming_call_dialog.dart';
 import '../call_screen.dart';
 import '../chat_screen.dart';
@@ -77,14 +78,16 @@ class _WorkshopRequestsScreenState extends State<WorkshopRequestsScreen> {
   }
 
   void _onChatMessage(ChatMessage message) {
-    // This channel also carries delivered/read-receipt echoes and deletion
-    // updates for messages *this* device sent — neither is a genuinely new
-    // incoming message, so neither should pop a notification.
     if (message.senderId == Session.instance.userId || message.isDeleted) return;
     NotificationService.showChatMessage(
       requestId: message.requestId,
       senderName: message.senderName,
       content: message.previewText,
+    );
+    WorkshopNotificationService.instance.addNewMessage(
+      requestId: message.requestId,
+      senderName: message.senderName,
+      previewText: message.previewText,
     );
   }
 
@@ -162,6 +165,12 @@ class _WorkshopRequestsScreenState extends State<WorkshopRequestsScreen> {
   void _onNotification(NotificationMessage message) {
     _silentRefresh();
     if (!mounted || message.type != NotificationType.newRequest) return;
+    if (message.requestId != null) {
+      WorkshopNotificationService.instance.addNewRequest(
+        requestId: message.requestId!,
+        message: message.message,
+      );
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: AppColors.primaryBlue,

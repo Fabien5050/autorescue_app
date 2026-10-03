@@ -9,6 +9,7 @@ import '../models/call_token.dart';
 import '../screens/call_screen.dart';
 import '../services/call_api.dart';
 import '../services/missed_call_service.dart';
+import '../services/workshop_notification_service.dart';
 
 /// Full-screen-blocking dialog shown the moment a [CallSignal.callInvite]
 /// arrives over the WebSocket — accepting joins the same Agora channel the
@@ -78,6 +79,11 @@ class _IncomingCallSheetState extends State<_IncomingCallSheet> {
     if (_busy) return;
     setState(() => _busy = true);
     MissedCallService.instance.addMissedCall(
+      requestId: widget.signal.requestId,
+      callerName: widget.signal.callerName,
+      callerPhotoUrl: widget.signal.callerPhotoUrl,
+    );
+    WorkshopNotificationService.instance.addMissedCall(
       requestId: widget.signal.requestId,
       callerName: widget.signal.callerName,
       callerPhotoUrl: widget.signal.callerPhotoUrl,

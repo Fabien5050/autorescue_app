@@ -5,11 +5,10 @@ import '../models/call_token.dart';
 import '../screens/call_screen.dart';
 import '../screens/chat_screen.dart';
 import '../services/call_api.dart';
-import '../services/missed_call_service.dart';
+import '../services/workshop_notification_service.dart';
 
 /// Top-bar notification bell widget for workshop screens.
-/// Displays a red badge count whenever there are missed calls or unread notifications,
-/// and opens a notification sheet on tap.
+/// Displays a red badge count for missed calls, new requests, and chat messages.
 class WorkshopNotificationButton extends StatelessWidget {
   const WorkshopNotificationButton({super.key});
 
@@ -27,10 +26,10 @@ class WorkshopNotificationButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<List<MissedCall>>(
-      valueListenable: MissedCallService.instance.missedCalls,
-      builder: (BuildContext context, List<MissedCall> missedCalls, Widget? _) {
-        final int count = missedCalls.length;
+    return ValueListenableBuilder<List<WorkshopNotificationItem>>(
+      valueListenable: WorkshopNotificationService.instance.notifications,
+      builder: (BuildContext context, List<WorkshopNotificationItem> list, Widget? _) {
+        final int count = list.length;
 
         return Stack(
           clipBehavior: Clip.none,
@@ -72,51 +71,54 @@ class WorkshopNotificationButton extends StatelessWidget {
 class _WorkshopNotificationSheet extends StatelessWidget {
   const _WorkshopNotificationSheet();
 
-  Future<void> _callBack(BuildContext context, MissedCall call) async {
+  Future<void> _callBack(BuildContext context, WorkshopNotificationItem item) async {
+    if (item.requestId == null) return;
     Navigator.of(context).pop();
+    final String name = item.callerName ?? 'Driver';
     try {
-      final CallToken token = await CallApi.start(call.requestId);
+      final CallToken token = await CallApi.start(item.requestId!);
       if (!context.mounted) return;
       Navigator.of(context).push(MaterialPageRoute<void>(
         builder: (BuildContext _) => CallScreen(
           token: token,
-          otherPartyName: call.callerName,
-          otherPartyPhotoUrl: call.callerPhotoUrl,
+          otherPartyName: name,
+          otherPartyPhotoUrl: item.callerPhotoUrl,
         ),
       ));
     } catch (_) {
       if (!context.mounted) return;
       final CallToken fallbackToken = CallToken(
         appId: '1f10928230b3438096f4dd71a1fa9300',
-        channel: 'request_${call.requestId}',
+        channel: 'request_${item.requestId}',
         token: '',
         uid: 0,
       );
       Navigator.of(context).push(MaterialPageRoute<void>(
         builder: (BuildContext _) => CallScreen(
           token: fallbackToken,
-          otherPartyName: call.callerName,
-          otherPartyPhotoUrl: call.callerPhotoUrl,
+          otherPartyName: name,
+          otherPartyPhotoUrl: item.callerPhotoUrl,
         ),
       ));
     }
   }
 
-  void _sendMessage(BuildContext context, MissedCall call) {
+  void _sendMessage(BuildContext context, WorkshopNotificationItem item) {
+    if (item.requestId == null) return;
     Navigator.of(context).pop();
     Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (BuildContext _) => ChatScreen(
-        requestId: call.requestId,
-        otherPartyName: call.callerName,
+        requestId: item.requestId!,
+        otherPartyName: item.callerName ?? 'Driver',
       ),
     ));
   }
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<List<MissedCall>>(
-      valueListenable: MissedCallService.instance.missedCalls,
-      builder: (BuildContext context, List<MissedCall> missedCalls, Widget? _) {
+    return ValueListenableBuilder<List<WorkshopNotificationItem>>(
+      valueListenable: WorkshopNotificationService.instance.notifications,
+      builder: (BuildContext context, List<WorkshopNotificationItem> list, Widget? _) {
         return DraggableScrollableSheet(
           expand: false,
           initialChildSize: 0.55,
@@ -150,16 +152,16 @@ class _WorkshopNotificationSheet extends StatelessWidget {
                           color: AppColors.heading,
                         ),
                       ),
-                      if (missedCalls.isNotEmpty)
+                      if (list.isNotEmpty)
                         TextButton(
-                          onPressed: () => MissedCallService.instance.clearAll(),
+                          onPressed: () => WorkshopNotificationService.instance.clearAll(),
                           child: const Text('Clear All', style: TextStyle(color: AppColors.slate)),
                         ),
                     ],
                   ),
                   const SizedBox(height: 12),
                   Expanded(
-                    child: missedCalls.isEmpty
+                    child: list.isEmpty
                         ? const Center(
                             child: Padding(
                               padding: EdgeInsets.all(24),
@@ -169,7 +171,7 @@ class _WorkshopNotificationSheet extends StatelessWidget {
                                   Icon(Icons.notifications_off_outlined, size: 42, color: AppColors.slateLight),
                                   SizedBox(height: 12),
                                   Text(
-                                    'No new missed calls or alerts.',
+                                    'No new notifications or alerts.',
                                     style: TextStyle(fontSize: 14, color: AppColors.slate),
                                   ),
                                 ],
@@ -178,10 +180,21 @@ class _WorkshopNotificationSheet extends StatelessWidget {
                           )
                         : ListView.separated(
                             controller: scrollController,
-                            itemCount: missedCalls.length,
+                            itemCount: list.length,
                             separatorBuilder: (_, __) => const SizedBox(height: 10),
                             itemBuilder: (BuildContext context, int index) {
-                              final MissedCall call = missedCalls[index];
+                              final WorkshopNotificationItem item = list[index];
+                              final IconData icon = switch (item.type) {
+                                WorkshopNotificationType.missedCall => Icons.phone_missed,
+                                WorkshopNotificationType.newRequest => Icons.warning_amber_rounded,
+                                WorkshopNotificationType.newChatMessage => Icons.chat_bubble_outline,
+                              };
+                              final Color iconColor = switch (item.type) {
+                                WorkshopNotificationType.missedCall => AppColors.dangerRed,
+                                WorkshopNotificationType.newRequest => AppColors.warningOrange,
+                                WorkshopNotificationType.newChatMessage => AppColors.accentGreen,
+                              };
+
                               return Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
@@ -193,45 +206,43 @@ class _WorkshopNotificationSheet extends StatelessWidget {
                                   children: <Widget>[
                                     CircleAvatar(
                                       radius: 20,
-                                      backgroundColor: AppColors.badgeSoft,
-                                      child: Text(
-                                        call.callerName.isNotEmpty ? call.callerName[0].toUpperCase() : '?',
-                                        style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primaryBlue),
-                                      ),
+                                      backgroundColor: iconColor.withValues(alpha: 0.12),
+                                      child: Icon(icon, color: iconColor, size: 20),
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: <Widget>[
-                                          Row(
-                                            children: <Widget>[
-                                              const Icon(Icons.phone_missed, color: AppColors.dangerRed, size: 15),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                call.callerName,
-                                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.heading),
-                                              ),
-                                            ],
+                                          Text(
+                                            item.title,
+                                            style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.heading),
                                           ),
                                           const SizedBox(height: 2),
                                           Text(
-                                            'Missed call at ${_formatTime(call.timestamp)}',
+                                            item.subtitle,
                                             style: const TextStyle(fontSize: 12, color: AppColors.slate),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            _formatTime(item.timestamp),
+                                            style: const TextStyle(fontSize: 10.5, color: AppColors.slateLight),
                                           ),
                                         ],
                                       ),
                                     ),
-                                    IconButton(
-                                      icon: const Icon(Icons.chat_bubble_outline, color: AppColors.accentGreen, size: 20),
-                                      tooltip: 'Message driver',
-                                      onPressed: () => _sendMessage(context, call),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.call, color: AppColors.primaryBlue, size: 20),
-                                      tooltip: 'Call back',
-                                      onPressed: () => _callBack(context, call),
-                                    ),
+                                    if (item.requestId != null) ...<Widget>[
+                                      IconButton(
+                                        icon: const Icon(Icons.chat_bubble_outline, color: AppColors.accentGreen, size: 20),
+                                        tooltip: 'Message',
+                                        onPressed: () => _sendMessage(context, item),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.call, color: AppColors.primaryBlue, size: 20),
+                                        tooltip: 'Call',
+                                        onPressed: () => _callBack(context, item),
+                                      ),
+                                    ],
                                   ],
                                 ),
                               );
