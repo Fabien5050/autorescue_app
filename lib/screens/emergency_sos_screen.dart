@@ -5,13 +5,16 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/api_client.dart';
 import '../core/app_colors.dart';
 import '../core/location_service.dart';
+import '../models/assistance_request.dart';
 import '../models/call_token.dart';
 import '../models/workshop.dart';
 import '../services/assistance_request_api.dart';
 import '../services/workshop_api.dart';
 import 'call_screen.dart';
+import 'workshop_profile_screen.dart';
 
-/// SOS tab: fastest path to sharing location and calling the nearest help.
+/// SOS tab: fastest path to sharing location and calling or requesting assistance
+/// from a specific chosen workshop.
 class EmergencySosScreen extends StatefulWidget {
   const EmergencySosScreen({super.key});
 
@@ -24,7 +27,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   double _driverLatitude = LocationService.fallbackLatitude;
   double _driverLongitude = LocationService.fallbackLongitude;
   bool _hasRealLocation = false;
-  bool _isSharing = false;
+  final Set<int> _requestingWorkshopIds = <int>{};
 
   @override
   void initState() {
@@ -41,8 +44,6 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       latitude: _driverLatitude,
       longitude: _driverLongitude,
     );
-    // Even in an emergency, some options beat a dead empty list if nothing
-    // is within normal range.
     if (nearby.isNotEmpty) return nearby;
     return WorkshopApi.listAll(fromLatitude: _driverLatitude, fromLongitude: _driverLongitude);
   }
@@ -57,27 +58,191 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     );
   }
 
-  Future<void> _requestAssistance(Workshop workshop) async {
+  Future<void> _requestAssistance(Workshop workshop, {String? description}) async {
+    setState(() => _requestingWorkshopIds.add(workshop.id));
     try {
-      await AssistanceRequestApi.create(
+      final AssistanceRequest request = await AssistanceRequestApi.create(
         workshopId: workshop.id,
         driverLatitude: _driverLatitude,
         driverLongitude: _driverLongitude,
+        description: description,
       );
-      if (mounted) _showSnack('Request sent to ${workshop.name}');
+      if (!mounted) return;
+      _showSnack('Emergency request sent to ${workshop.name}');
+      // Opens workshop detail page paired with active request ID
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => WorkshopProfileScreen(workshop: workshop, requestId: request.id),
+        ),
+      );
     } on ApiException catch (error) {
       if (mounted) _showSnack(error.message, isError: true);
+    } finally {
+      if (mounted) setState(() => _requestingWorkshopIds.remove(workshop.id));
     }
   }
 
-  Future<void> _shareLocation(List<Workshop> nearby) async {
+  void _showRequestModal(Workshop workshop) {
+    final TextEditingController descriptionController = TextEditingController();
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext sheetContext) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            16,
+            20,
+            MediaQuery.of(sheetContext).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Row(
+                children: <Widget>[
+                  const Icon(Icons.storefront, color: AppColors.primaryBlue, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      workshop.name,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.heading),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Distance: ${workshop.distanceLabel} • ${workshop.town}',
+                style: const TextStyle(fontSize: 12.5, color: AppColors.slate),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Breakdown Description (Optional)',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.heading),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: descriptionController,
+                maxLines: 3,
+                style: const TextStyle(fontSize: 13.5),
+                decoration: InputDecoration(
+                  hintText: 'e.g., Flat tire on highway, engine overheating, battery dead...',
+                  hintStyle: const TextStyle(fontSize: 13, color: AppColors.slateLight),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.all(12),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(sheetContext).pop();
+                    _requestAssistance(workshop, description: descriptionController.text.trim());
+                  },
+                  icon: const Icon(Icons.send_rounded, size: 18),
+                  label: Text('Send Emergency Request to ${workshop.name}'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primaryBlue,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showSelectWorkshopSheet(List<Workshop> nearby) {
     if (nearby.isEmpty) {
       _showSnack('No nearby workshops found right now.', isError: true);
       return;
     }
-    setState(() => _isSharing = true);
-    await _requestAssistance(nearby.first);
-    if (mounted) setState(() => _isSharing = false);
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext sheetContext) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const Text(
+                'Select Workshop to Send Request',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.heading),
+              ),
+              const SizedBox(height: 4),
+              const Text('Choose which workshop you want to send your location to:', style: TextStyle(fontSize: 12.5, color: AppColors.slate)),
+              const SizedBox(height: 14),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: nearby.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (BuildContext context, int index) {
+                    final Workshop w = nearby[index];
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: AppColors.border),
+                      ),
+                      leading: const CircleAvatar(
+                        backgroundColor: AppColors.badgeSoft,
+                        child: Icon(Icons.storefront, color: AppColors.primaryBlue, size: 20),
+                      ),
+                      title: Text(w.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                      subtitle: Text('${w.distanceLabel} • ${w.town}', style: const TextStyle(fontSize: 12, color: AppColors.slate)),
+                      trailing: const Icon(Icons.chevron_right, color: AppColors.primaryBlue),
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        _showRequestModal(w);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _dial(String phoneNumber, String label) async {
@@ -127,9 +292,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       _ShareLocationCard(
-                        isBusy: _isSharing,
                         hasRealLocation: _hasRealLocation,
-                        onTap: () => _shareLocation(nearby),
+                        onTap: () => _showSelectWorkshopSheet(nearby),
                       ),
                       const SizedBox(height: 22),
                       const Text(
@@ -142,7 +306,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                       ),
                       const SizedBox(height: 2),
                       const Text(
-                        'Tap call for immediate assistance',
+                        'Select a workshop to call or send an emergency request',
                         style: TextStyle(fontSize: 12, color: AppColors.slate),
                       ),
                       const SizedBox(height: 12),
@@ -168,7 +332,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                           _NearestWorkshopRow(
                             workshop: nearby[i],
                             urgent: i == 0,
+                            isBusy: _requestingWorkshopIds.contains(nearby[i].id),
                             onCall: () => _callWorkshop(nearby[i]),
+                            onRequest: () => _showRequestModal(nearby[i]),
                           ),
                           if (i != nearby.length - 1) const SizedBox(height: 10),
                         ],
@@ -253,10 +419,10 @@ class _EmergencyHeader extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       color: const Color(0xFFFEF2F2),
-      child: Row(
+      child: const Row(
         children: <Widget>[
-          const Icon(Icons.warning_amber_rounded, color: AppColors.emergencyRed, size: 22),
-          const SizedBox(width: 10),
+          Icon(Icons.warning_amber_rounded, color: AppColors.emergencyRed, size: 22),
+          SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -275,7 +441,7 @@ class _EmergencyHeader extends StatelessWidget {
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.6,
-                    color: AppColors.emergencyRed.withValues(alpha: 0.8),
+                    color: AppColors.emergencyRed,
                   ),
                 ),
               ],
@@ -290,12 +456,10 @@ class _EmergencyHeader extends StatelessWidget {
 class _ShareLocationCard extends StatelessWidget {
   const _ShareLocationCard({
     required this.onTap,
-    required this.isBusy,
     required this.hasRealLocation,
   });
 
   final VoidCallback onTap;
-  final bool isBusy;
   final bool hasRealLocation;
 
   @override
@@ -304,10 +468,10 @@ class _ShareLocationCard extends StatelessWidget {
       color: AppColors.primaryBlue,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        onTap: isBusy ? null : onTap,
+        onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
           child: Column(
             children: <Widget>[
               Container(
@@ -317,12 +481,7 @@ class _ShareLocationCard extends StatelessWidget {
                   color: Colors.white.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: isBusy
-                    ? const Padding(
-                        padding: EdgeInsets.all(13),
-                        child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white),
-                      )
-                    : const Icon(Icons.my_location, color: Colors.white, size: 22),
+                child: const Icon(Icons.my_location, color: Colors.white, size: 22),
               ),
               const SizedBox(height: 10),
               const Text(
@@ -337,8 +496,8 @@ class _ShareLocationCard extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 hasRealLocation
-                    ? 'Using your current location'
-                    : 'Location unavailable — using an approximate area',
+                    ? 'Tap to select a nearby workshop and send emergency alert'
+                    : 'Location unavailable — tap to select workshop',
                 style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.85)),
               ),
             ],
@@ -354,16 +513,18 @@ class _NearestWorkshopRow extends StatelessWidget {
     required this.workshop,
     required this.urgent,
     required this.onCall,
+    required this.onRequest,
+    this.isBusy = false,
   });
 
   final Workshop workshop;
   final bool urgent;
   final VoidCallback onCall;
+  final VoidCallback onRequest;
+  final bool isBusy;
 
   @override
   Widget build(BuildContext context) {
-    final Color callColor = urgent ? AppColors.emergencyRed : AppColors.primaryBlue;
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
@@ -371,71 +532,68 @@ class _NearestWorkshopRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.border),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    if (workshop.isOpenNow)
-                      Container(
-                        width: 7,
-                        height: 7,
-                        margin: const EdgeInsets.only(right: 6),
-                        decoration: const BoxDecoration(
-                          color: AppColors.success,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    Flexible(
-                      child: Text(
-                        workshop.name,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.heading,
-                        ),
-                      ),
-                    ),
-                  ],
+          Row(
+            children: <Widget>[
+              if (workshop.isOpenNow)
+                Container(
+                  width: 7,
+                  height: 7,
+                  margin: const EdgeInsets.only(right: 6),
+                  decoration: const BoxDecoration(
+                    color: AppColors.success,
+                    shape: BoxShape.circle,
+                  ),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  workshop.distanceLabel,
-                  style: const TextStyle(fontSize: 12, color: AppColors.slate),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          Material(
-            color: callColor,
-            borderRadius: BorderRadius.circular(10),
-            child: InkWell(
-              onTap: onCall,
-              borderRadius: BorderRadius.circular(10),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Icon(Icons.call, size: 15, color: Colors.white),
-                    SizedBox(width: 6),
-                    Text(
-                      'CALL',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
+              Expanded(
+                child: Text(
+                  workshop.name,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.heading,
+                  ),
                 ),
               ),
-            ),
+              Text(
+                workshop.distanceLabel,
+                style: const TextStyle(fontSize: 12, color: AppColors.slate, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onCall,
+                  icon: const Icon(Icons.call, size: 15),
+                  label: const Text('CALL'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primaryBlue,
+                    side: const BorderSide(color: AppColors.primaryBlue),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: isBusy ? null : onRequest,
+                  icon: isBusy
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.send_rounded, size: 15),
+                  label: Text(isBusy ? 'Sending…' : 'REQUEST'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: urgent ? AppColors.emergencyRed : AppColors.primaryBlue,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
