@@ -13,11 +13,15 @@ class MapLocationPreview extends StatelessWidget {
     required this.latitude,
     required this.longitude,
     required this.onSetLocation,
+    this.onUseCurrentLocation,
+    this.isGettingCurrentLocation = false,
   });
 
   final double latitude;
   final double longitude;
   final VoidCallback onSetLocation;
+  final VoidCallback? onUseCurrentLocation;
+  final bool isGettingCurrentLocation;
 
   String get _coordinateLabel {
     final String latHemisphere = latitude >= 0 ? 'N' : 'S';
@@ -61,20 +65,46 @@ class MapLocationPreview extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: onSetLocation,
-            icon: const Icon(Icons.my_location, size: 16, color: AppColors.burntOrange),
-            label: const Text('Set Physical Location on Map'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.burntOrange,
-              side: const BorderSide(color: AppColors.burntOrange, width: 1.3),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: onSetLocation,
+                icon: const Icon(Icons.map_outlined, size: 16),
+                label: const Text('Choose on Map'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.burntOrange,
+                  side: const BorderSide(color: AppColors.burntOrange, width: 1.3),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                ),
+              ),
             ),
-          ),
+            if (onUseCurrentLocation != null) ...<Widget>[
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: isGettingCurrentLocation ? null : onUseCurrentLocation,
+                  icon: isGettingCurrentLocation
+                      ? const SizedBox(
+                          width: 15,
+                          height: 15,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.my_location, size: 16),
+                  label: const Text('Use Current'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primaryBlue,
+                    side: const BorderSide(color: AppColors.primaryBlue, width: 1.3),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ],
     );

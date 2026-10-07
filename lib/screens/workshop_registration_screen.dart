@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../core/api_client.dart';
 import '../core/app_colors.dart';
+import '../core/location_service.dart';
 import '../services/auth_api.dart';
 import '../services/workshop_api.dart';
 import '../widgets/file_upload_button.dart';
@@ -16,6 +17,7 @@ import '../widgets/service_chip_group.dart';
 import '../widgets/verification_timeline.dart';
 import 'login_screen.dart';
 import 'workshop_owner/workshop_owner_main.dart';
+import 'workshop_owner/workshop_location_screen.dart';
 
 /// A document picked from disk/camera, read into memory immediately so it
 /// can be uploaded regardless of platform (web has no filesystem path).
@@ -85,12 +87,13 @@ class _WorkshopRegistrationScreenState
   _PickedFile? _ownerIdBack;
   _PickedFile? _facePhoto;
   bool _isSubmitting = false;
+  bool _isGettingCurrentLocation = false;
+  bool _hasConfirmedLocation = false;
 
   final ImagePicker _imagePicker = ImagePicker();
 
-  // Buea, South-West Region — placeholder until a real map picker is wired.
-  final double _latitude = 4.1550;
-  final double _longitude = 9.2415;
+  double _latitude = LocationService.fallbackLatitude;
+  double _longitude = LocationService.fallbackLongitude;
 
   final Set<String> _selectedServices = <String>{};
   String? _servicesError;
@@ -196,16 +199,67 @@ class _WorkshopRegistrationScreenState
     setState(() => onPicked(_PickedFile(name: photo.name, bytes: bytes)));
   }
 
-  void _setPhysicalLocation() {
-    // Stub: a real implementation would open a map picker and write back
-    // the chosen lat/lng. No mapping package is wired into this project yet.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        backgroundColor: AppColors.navy,
-        behavior: SnackBarBehavior.floating,
-        content: Text('Map picker not wired up yet — using default location.'),
+  Future<void> _setPhysicalLocation() async {
+    final (double, double)? result = await Navigator.of(context).push<(double, double)>(
+      MaterialPageRoute<(double, double)>(
+        builder: (_) => WorkshopLocationScreen(
+          initialLatitude: _latitude,
+          initialLongitude: _longitude,
+          address: _addressController.text.trim(),
+        ),
       ),
     );
+    if (result == null || !mounted) return;
+    setState(() {
+      _latitude = result.$1;
+      _longitude = result.$2;
+      _hasConfirmedLocation = true;
+    });
+  }
+
+  Future<void> _useCurrentLocation() async {
+    setState(() => _isGettingCurrentLocation = true);
+    try {
+      final position = await LocationService.getCurrentPosition();
+      if (!mounted) return;
+
+      if (position == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: AppColors.navy,
+            behavior: SnackBarBehavior.floating,
+            content: Text(
+              'Could not get your location. Enable location services and allow location access, then try again.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      setState(() {
+        _latitude = position.latitude;
+        _longitude = position.longitude;
+        _hasConfirmedLocation = true;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: AppColors.navy,
+          behavior: SnackBarBehavior.floating,
+          content: Text('Current location set. Check the pin is on your workshop before submitting.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.navy,
+          behavior: SnackBarBehavior.floating,
+          content: Text('Unable to read device location: $error'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isGettingCurrentLocation = false);
+    }
   }
 
   void _goBack() {
@@ -228,6 +282,16 @@ class _WorkshopRegistrationScreenState
       }
     });
     if (!formValid || _selectedServices.isEmpty) return;
+    if (!_hasConfirmedLocation) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: AppColors.navy,
+          behavior: SnackBarBehavior.floating,
+          content: Text('Set the workshop location using GPS or the map before submitting.'),
+        ),
+      );
+      return;
+    }
 
     setState(() => _isSubmitting = true);
     try {
@@ -469,6 +533,8 @@ class _WorkshopRegistrationScreenState
                       latitude: _latitude,
                       longitude: _longitude,
                       onSetLocation: _setPhysicalLocation,
+                      onUseCurrentLocation: _useCurrentLocation,
+                      isGettingCurrentLocation: _isGettingCurrentLocation,
                     ),
                     FloatingLabelField(
                       label: 'Physical Address',

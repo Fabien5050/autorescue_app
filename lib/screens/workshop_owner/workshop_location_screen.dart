@@ -115,8 +115,7 @@ class _WorkshopLocationScreenState extends State<WorkshopLocationScreen> {
                     left: 12,
                     top: 12,
                     child: _MapHint(
-                        text:
-                            'Tap the map or drag the pin to move the workshop marker'),
+                        text: 'Tap the map to move the workshop marker'),
                   ),
                 ],
               ),
