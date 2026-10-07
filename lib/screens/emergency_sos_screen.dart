@@ -353,18 +353,63 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                               : OpenStreetMapView(
                                   center: LatLng(_driverLatitude, _driverLongitude),
                                   zoom: 15,
-                                  markers: _hasRealLocation
-                                      ? <Marker>[
-                                          Marker(
-                                            point: LatLng(_driverLatitude, _driverLongitude),
-                                            child: const Icon(
-                                              Icons.my_location,
-                                              color: AppColors.primaryBlue,
-                                              size: 32,
+                                  markers: <Marker>[
+                                    if (_hasRealLocation)
+                                      Marker(
+                                        point: LatLng(_driverLatitude, _driverLongitude),
+                                        width: 32,
+                                        height: 32,
+                                        child: const Icon(
+                                          Icons.my_location,
+                                          color: AppColors.primaryBlue,
+                                          size: 28,
+                                        ),
+                                      ),
+                                    for (final Workshop w in nearby)
+                                      if (w.latitude != null && w.longitude != null)
+                                        Marker(
+                                          point: LatLng(w.latitude!, w.longitude!),
+                                          width: 140,
+                                          height: 60,
+                                          child: GestureDetector(
+                                            onTap: () => _callWorkshop(w),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: <Widget>[
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.navy,
+                                                    borderRadius: BorderRadius.circular(6),
+                                                    boxShadow: <BoxShadow>[
+                                                      BoxShadow(
+                                                        color: Colors.black.withValues(alpha: 0.25),
+                                                        blurRadius: 6,
+                                                        offset: const Offset(0, 2),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  child: Text(
+                                                    w.name,
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 10.5,
+                                                      fontWeight: FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const Icon(
+                                                  Icons.location_on,
+                                                  color: AppColors.burntOrange,
+                                                  size: 32,
+                                                ),
+                                              ],
                                             ),
                                           ),
-                                        ]
-                                      : const <Marker>[],
+                                        ),
+                                  ],
                                 ),
                         ),
                       ),

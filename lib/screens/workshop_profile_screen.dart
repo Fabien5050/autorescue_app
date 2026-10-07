@@ -224,7 +224,38 @@ class _WorkshopProfileScreenState extends State<WorkshopProfileScreen> {
                         markers: <Marker>[
                           Marker(
                             point: LatLng(workshop.latitude!, workshop.longitude!),
-                            child: const Icon(Icons.location_on, color: AppColors.burntOrange, size: 36),
+                            width: 140,
+                            height: 60,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.navy,
+                                    borderRadius: BorderRadius.circular(6),
+                                    boxShadow: <BoxShadow>[
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.25),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Text(
+                                    workshop.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                const Icon(Icons.location_on, color: AppColors.burntOrange, size: 32),
+                              ],
+                            ),
                           ),
                         ],
                       ),
