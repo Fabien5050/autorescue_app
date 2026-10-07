@@ -28,6 +28,7 @@ class DriverHomeMapScreen extends StatefulWidget {
 }
 
 class _DriverHomeMapScreenState extends State<DriverHomeMapScreen> {
+  final MapController _mapController = MapController();
   String _activeFilter = _filterCategories.first;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
@@ -93,7 +94,35 @@ class _DriverHomeMapScreenState extends State<DriverHomeMapScreen> {
     }).toList();
   }
 
-  void _openWorkshop(Workshop workshop) {
+  void _onSearchChanged(String query) {
+    setState(() => _searchQuery = query);
+    final List<Workshop> matches = _filteredWorkshops;
+    if (matches.isNotEmpty && matches.first.latitude != null && matches.first.longitude != null) {
+      _mapController.move(
+        LatLng(matches.first.latitude!, matches.first.longitude!),
+        13.5,
+      );
+    }
+  }
+
+  void _onFilterSelected(String category) {
+    setState(() => _activeFilter = category);
+    final List<Workshop> matches = _filteredWorkshops;
+    if (matches.isNotEmpty && matches.first.latitude != null && matches.first.longitude != null) {
+      _mapController.move(
+        LatLng(matches.first.latitude!, matches.first.longitude!),
+        13.5,
+      );
+    }
+  }
+
+  void _selectWorkshop(Workshop workshop) {
+    if (workshop.latitude != null && workshop.longitude != null) {
+      _mapController.move(
+        LatLng(workshop.latitude!, workshop.longitude!),
+        14.5,
+      );
+    }
     Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => WorkshopProfileScreen(workshop: workshop)),
     );
@@ -102,6 +131,7 @@ class _DriverHomeMapScreenState extends State<DriverHomeMapScreen> {
   @override
   Widget build(BuildContext context) {
     final List<Workshop> workshops = _filteredWorkshops;
+    final List<Workshop> top5Workshops = workshops.take(5).toList();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -111,6 +141,7 @@ class _DriverHomeMapScreenState extends State<DriverHomeMapScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : OpenStreetMapView(
+                    mapController: _mapController,
                     center: LatLng(_myLatitude, _myLongitude),
                     zoom: 13.5,
                     markers: <Marker>[
@@ -125,18 +156,47 @@ class _DriverHomeMapScreenState extends State<DriverHomeMapScreen> {
                             size: 28,
                           ),
                         ),
-                      for (final Workshop w in workshops)
+                      for (final Workshop w in top5Workshops)
                         if (w.latitude != null && w.longitude != null)
                           Marker(
                             point: LatLng(w.latitude!, w.longitude!),
-                            width: 44,
-                            height: 48,
+                            width: 140,
+                            height: 60,
                             child: GestureDetector(
-                              onTap: () => _openWorkshop(w),
-                              child: const Icon(
-                                Icons.location_on,
-                                color: AppColors.burntOrange,
-                                size: 40,
+                              onTap: () => _selectWorkshop(w),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.navy,
+                                      borderRadius: BorderRadius.circular(6),
+                                      boxShadow: <BoxShadow>[
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.25),
+                                          blurRadius: 6,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Text(
+                                      w.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  const Icon(
+                                    Icons.location_on,
+                                    color: AppColors.burntOrange,
+                                    size: 32,
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -151,7 +211,7 @@ class _DriverHomeMapScreenState extends State<DriverHomeMapScreen> {
                 children: <Widget>[
                   _SearchBar(
                     controller: _searchController,
-                    onChanged: (String value) => setState(() => _searchQuery = value),
+                    onChanged: _onSearchChanged,
                   ),
                   const SizedBox(height: 10),
                   SizedBox(
@@ -166,7 +226,7 @@ class _DriverHomeMapScreenState extends State<DriverHomeMapScreen> {
                         return _FilterChip(
                           label: category,
                           selected: selected,
-                          onTap: () => setState(() => _activeFilter = category),
+                          onTap: () => _onFilterSelected(category),
                         );
                       },
                     ),
@@ -183,8 +243,8 @@ class _DriverHomeMapScreenState extends State<DriverHomeMapScreen> {
           Align(
             alignment: Alignment.bottomCenter,
             child: _WorkshopsSheet(
-              workshops: workshops,
-              onWorkshopTap: _openWorkshop,
+              workshops: top5Workshops,
+              onWorkshopTap: _selectWorkshop,
               onViewAll: widget.onViewAllWorkshops,
             ),
           ),
@@ -377,7 +437,7 @@ class _WorkshopsSheet extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: <Widget>[
                   const Text(
-                    'Workshops Near You',
+                    'Nearest 5 Workshops',
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
@@ -402,7 +462,7 @@ class _WorkshopsSheet extends StatelessWidget {
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 20),
                   child: Text(
-                    'No workshops found for this filter.',
+                    'No workshops found for this search.',
                     style: TextStyle(fontSize: 12.5, color: AppColors.slate),
                   ),
                 )

@@ -257,7 +257,31 @@ class _CoverageAreaCard extends StatelessWidget {
                           if (w.latitude != null && w.longitude != null)
                             Marker(
                               point: LatLng(w.latitude!, w.longitude!),
-                              child: const Icon(Icons.location_on, color: AppColors.burntOrange, size: 30),
+                              width: 130,
+                              height: 55,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.navy,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      w.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  const Icon(Icons.location_on, color: AppColors.burntOrange, size: 26),
+                                ],
+                              ),
                             ),
                       ],
                     ),
