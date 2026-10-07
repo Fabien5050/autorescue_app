@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../core/app_colors.dart';
 import '../core/location_service.dart';
 import '../models/workshop.dart';
 import '../services/workshop_api.dart';
 import '../widgets/workshop_cards.dart';
+import '../widgets/open_street_map_view.dart';
 import 'workshop_profile_screen.dart';
 
 const List<String> _filterCategories = <String>['Nearby', 'Towing', 'Mechanic', 'Electrician'];
@@ -108,24 +110,37 @@ class _DriverHomeMapScreenState extends State<DriverHomeMapScreen> {
           Positioned.fill(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : GoogleMap(
-                    initialCameraPosition: CameraPosition(
-                      target: LatLng(_myLatitude, _myLongitude),
-                      zoom: 13.5,
-                    ),
-                    myLocationEnabled: _hasRealLocation,
-                    myLocationButtonEnabled: false,
-                    zoomControlsEnabled: false,
-                    markers: <Marker>{
+                : OpenStreetMapView(
+                    center: LatLng(_myLatitude, _myLongitude),
+                    zoom: 13.5,
+                    markers: <Marker>[
+                      if (_hasRealLocation)
+                        Marker(
+                          point: LatLng(_myLatitude, _myLongitude),
+                          width: 36,
+                          height: 36,
+                          child: const Icon(
+                            Icons.my_location,
+                            color: AppColors.primaryBlue,
+                            size: 28,
+                          ),
+                        ),
                       for (final Workshop w in workshops)
                         if (w.latitude != null && w.longitude != null)
                           Marker(
-                            markerId: MarkerId('workshop-${w.id}'),
-                            position: LatLng(w.latitude!, w.longitude!),
-                            infoWindow: InfoWindow(title: w.name, snippet: w.distanceLabel),
-                            onTap: () => _openWorkshop(w),
+                            point: LatLng(w.latitude!, w.longitude!),
+                            width: 44,
+                            height: 48,
+                            child: GestureDetector(
+                              onTap: () => _openWorkshop(w),
+                              child: const Icon(
+                                Icons.location_on,
+                                color: AppColors.burntOrange,
+                                size: 40,
+                              ),
+                            ),
                           ),
-                    },
+                    ],
                   ),
           ),
           SafeArea(

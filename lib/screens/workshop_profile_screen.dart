@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../core/app_colors.dart';
 import '../core/notification_service.dart';
@@ -7,6 +8,7 @@ import '../models/call_token.dart';
 import '../models/workshop.dart';
 import '../models/workshop_photo.dart';
 import '../services/call_api.dart';
+import '../widgets/open_street_map_view.dart';
 import '../widgets/rating_badge.dart';
 import 'call_screen.dart';
 import 'chat_screen.dart';
@@ -215,18 +217,16 @@ class _WorkshopProfileScreenState extends State<WorkshopProfileScreen> {
                     child: SizedBox(
                       height: 160,
                       width: double.infinity,
-                      child: GoogleMap(
-                        initialCameraPosition: CameraPosition(
-                          target: LatLng(workshop.latitude!, workshop.longitude!),
-                          zoom: 15,
-                        ),
-                        zoomControlsEnabled: false,
-                        markers: <Marker>{
+                      child: OpenStreetMapView(
+                        center: LatLng(workshop.latitude!, workshop.longitude!),
+                        zoom: 15,
+                        interactive: false,
+                        markers: <Marker>[
                           Marker(
-                            markerId: const MarkerId('workshop-location'),
-                            position: LatLng(workshop.latitude!, workshop.longitude!),
+                            point: LatLng(workshop.latitude!, workshop.longitude!),
+                            child: const Icon(Icons.location_on, color: AppColors.burntOrange, size: 36),
                           ),
-                        },
+                        ],
                       ),
                     ),
                   ),

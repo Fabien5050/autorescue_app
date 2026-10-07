@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../core/app_colors.dart';
+import '../../widgets/open_street_map_view.dart';
 import '../../widgets/primary_button.dart';
 
 /// Dedicated map picker screen — tap anywhere to move the workshop marker.
@@ -24,7 +26,7 @@ class WorkshopLocationScreen extends StatefulWidget {
 class _WorkshopLocationScreenState extends State<WorkshopLocationScreen> {
   late double _latitude = widget.initialLatitude;
   late double _longitude = widget.initialLongitude;
-  GoogleMapController? _mapController;
+  final MapController _mapController = MapController();
 
   void _moveMarker(LatLng position) {
     setState(() {
@@ -38,9 +40,8 @@ class _WorkshopLocationScreenState extends State<WorkshopLocationScreen> {
       _latitude = widget.initialLatitude;
       _longitude = widget.initialLongitude;
     });
-    _mapController?.animateCamera(
-      CameraUpdate.newLatLng(LatLng(widget.initialLatitude, widget.initialLongitude)),
-    );
+    _mapController.move(
+        LatLng(widget.initialLatitude, widget.initialLongitude), 16);
   }
 
   void _confirm() {
@@ -60,7 +61,8 @@ class _WorkshopLocationScreenState extends State<WorkshopLocationScreen> {
                 children: <Widget>[
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.arrow_back, color: AppColors.primaryText),
+                    icon: const Icon(Icons.arrow_back,
+                        color: AppColors.primaryText),
                   ),
                   Expanded(
                     child: Container(
@@ -73,12 +75,15 @@ class _WorkshopLocationScreenState extends State<WorkshopLocationScreen> {
                       ),
                       child: const Row(
                         children: <Widget>[
-                          Icon(Icons.search, size: 18, color: AppColors.secondaryText),
+                          Icon(Icons.search,
+                              size: 18, color: AppColors.secondaryText),
                           SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               'Search location',
-                              style: TextStyle(fontSize: 13.5, color: AppColors.secondaryText),
+                              style: TextStyle(
+                                  fontSize: 13.5,
+                                  color: AppColors.secondaryText),
                             ),
                           ),
                         ],
@@ -92,27 +97,26 @@ class _WorkshopLocationScreenState extends State<WorkshopLocationScreen> {
               child: Stack(
                 fit: StackFit.expand,
                 children: <Widget>[
-                  GoogleMap(
-                    initialCameraPosition: CameraPosition(
-                      target: LatLng(_latitude, _longitude),
-                      zoom: 16,
-                    ),
-                    onMapCreated: (GoogleMapController controller) => _mapController = controller,
-                    onTap: _moveMarker,
-                    zoomControlsEnabled: false,
-                    markers: <Marker>{
+                  OpenStreetMapView(
+                    mapController: _mapController,
+                    center: LatLng(_latitude, _longitude),
+                    zoom: 16,
+                    onTap: (TapPosition tapPosition, LatLng point) =>
+                        _moveMarker(point),
+                    markers: <Marker>[
                       Marker(
-                        markerId: const MarkerId('workshop-location'),
-                        position: LatLng(_latitude, _longitude),
-                        draggable: true,
-                        onDragEnd: _moveMarker,
+                        point: LatLng(_latitude, _longitude),
+                        child: const Icon(Icons.location_on,
+                            color: AppColors.burntOrange, size: 42),
                       ),
-                    },
+                    ],
                   ),
                   const Positioned(
                     left: 12,
                     top: 12,
-                    child: _MapHint(text: 'Tap the map or drag the pin to move the workshop marker'),
+                    child: _MapHint(
+                        text:
+                            'Tap the map or drag the pin to move the workshop marker'),
                   ),
                 ],
               ),
@@ -123,7 +127,10 @@ class _WorkshopLocationScreenState extends State<WorkshopLocationScreen> {
                 color: AppColors.card,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 boxShadow: <BoxShadow>[
-                  BoxShadow(color: Color(0x14000000), blurRadius: 16, offset: Offset(0, -4)),
+                  BoxShadow(
+                      color: Color(0x14000000),
+                      blurRadius: 16,
+                      offset: Offset(0, -4)),
                 ],
               ),
               child: Column(
@@ -131,16 +138,27 @@ class _WorkshopLocationScreenState extends State<WorkshopLocationScreen> {
                 children: <Widget>[
                   const Text(
                     'Workshop Location',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.primaryText),
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primaryText),
                   ),
                   const SizedBox(height: 4),
-                  Text(widget.address, style: const TextStyle(fontSize: 12.5, color: AppColors.secondaryText)),
+                  Text(widget.address,
+                      style: const TextStyle(
+                          fontSize: 12.5, color: AppColors.secondaryText)),
                   const SizedBox(height: 10),
                   Row(
                     children: <Widget>[
-                      Expanded(child: _CoordinateTile(label: 'Latitude', value: _latitude.toStringAsFixed(4))),
+                      Expanded(
+                          child: _CoordinateTile(
+                              label: 'Latitude',
+                              value: _latitude.toStringAsFixed(4))),
                       const SizedBox(width: 10),
-                      Expanded(child: _CoordinateTile(label: 'Longitude', value: _longitude.toStringAsFixed(4))),
+                      Expanded(
+                          child: _CoordinateTile(
+                              label: 'Longitude',
+                              value: _longitude.toStringAsFixed(4))),
                     ],
                   ),
                   const SizedBox(height: 14),
@@ -151,16 +169,21 @@ class _WorkshopLocationScreenState extends State<WorkshopLocationScreen> {
                           onPressed: _resetToInitial,
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.primaryBlue,
-                            side: const BorderSide(color: AppColors.primaryBlue),
+                            side:
+                                const BorderSide(color: AppColors.primaryBlue),
                             padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(26)),
                           ),
                           child: const Text('Use This Location'),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: PrimaryButton(label: 'Confirm Location', trailingIcon: null, onPressed: _confirm),
+                        child: PrimaryButton(
+                            label: 'Confirm Location',
+                            trailingIcon: null,
+                            onPressed: _confirm),
                       ),
                     ],
                   ),
@@ -187,7 +210,8 @@ class _MapHint extends StatelessWidget {
         color: Colors.black.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(text, style: const TextStyle(fontSize: 11, color: Colors.white)),
+      child:
+          Text(text, style: const TextStyle(fontSize: 11, color: Colors.white)),
     );
   }
 }
@@ -202,13 +226,20 @@ class _CoordinateTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(10)),
+      decoration: BoxDecoration(
+          color: AppColors.background, borderRadius: BorderRadius.circular(10)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(label, style: const TextStyle(fontSize: 10.5, color: AppColors.secondaryText)),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 10.5, color: AppColors.secondaryText)),
           const SizedBox(height: 2),
-          Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primaryText)),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primaryText)),
         ],
       ),
     );

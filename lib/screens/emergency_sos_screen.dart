@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api_client.dart';
@@ -10,6 +11,7 @@ import '../models/call_token.dart';
 import '../models/workshop.dart';
 import '../services/assistance_request_api.dart';
 import '../services/workshop_api.dart';
+import '../widgets/open_street_map_view.dart';
 import 'call_screen.dart';
 import 'workshop_profile_screen.dart';
 
@@ -348,14 +350,21 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                           width: double.infinity,
                           child: loading
                               ? const Center(child: CircularProgressIndicator())
-                              : GoogleMap(
-                                  initialCameraPosition: CameraPosition(
-                                    target: LatLng(_driverLatitude, _driverLongitude),
-                                    zoom: 15,
-                                  ),
-                                  myLocationEnabled: _hasRealLocation,
-                                  myLocationButtonEnabled: false,
-                                  zoomControlsEnabled: false,
+                              : OpenStreetMapView(
+                                  center: LatLng(_driverLatitude, _driverLongitude),
+                                  zoom: 15,
+                                  markers: _hasRealLocation
+                                      ? <Marker>[
+                                          Marker(
+                                            point: LatLng(_driverLatitude, _driverLongitude),
+                                            child: const Icon(
+                                              Icons.my_location,
+                                              color: AppColors.primaryBlue,
+                                              size: 32,
+                                            ),
+                                          ),
+                                        ]
+                                      : const <Marker>[],
                                 ),
                         ),
                       ),

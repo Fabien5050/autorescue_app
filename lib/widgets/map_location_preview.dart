@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../core/app_colors.dart';
+import 'open_street_map_view.dart';
 
 /// Small static map preview with a coordinate readout and a "set location"
 /// action that opens the full interactive picker.
@@ -35,22 +37,16 @@ class MapLocationPreview extends StatelessWidget {
             height: 120,
             width: double.infinity,
             child: IgnorePointer(
-              child: GoogleMap(
-                initialCameraPosition: CameraPosition(
-                  target: LatLng(latitude, longitude),
-                  zoom: 15,
-                ),
-                zoomControlsEnabled: false,
-                scrollGesturesEnabled: false,
-                zoomGesturesEnabled: false,
-                rotateGesturesEnabled: false,
-                tiltGesturesEnabled: false,
-                markers: <Marker>{
+              child: OpenStreetMapView(
+                center: LatLng(latitude, longitude),
+                zoom: 15,
+                interactive: false,
+                markers: <Marker>[
                   Marker(
-                    markerId: const MarkerId('preview-location'),
-                    position: LatLng(latitude, longitude),
+                    point: LatLng(latitude, longitude),
+                    child: const Icon(Icons.location_on, color: AppColors.burntOrange, size: 36),
                   ),
-                },
+                ],
               ),
             ),
           ),

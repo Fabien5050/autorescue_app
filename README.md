@@ -2,6 +2,15 @@
 
 A new Flutter project.
 
+## Maps
+
+The app uses OpenStreetMap tiles through `flutter_map`; Google Maps API keys
+are not required. Map tiles need an internet connection, and the map displays
+OpenStreetMap attribution. The public OpenStreetMap tile service is subject to
+its usage policy and is not intended as an unlimited production tile host.
+For higher traffic, use a tile provider or host that meets the app's usage
+needs.
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.

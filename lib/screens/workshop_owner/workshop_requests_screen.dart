@@ -1,7 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../core/api_client.dart';
 import '../../core/app_colors.dart';
@@ -18,6 +19,7 @@ import '../../services/call_api.dart';
 import '../../services/missed_call_service.dart';
 import '../../services/workshop_notification_service.dart';
 import '../../widgets/incoming_call_dialog.dart';
+import '../../widgets/open_street_map_view.dart';
 import '../call_screen.dart';
 import '../chat_screen.dart';
 
@@ -428,25 +430,19 @@ class _RequestCard extends StatelessWidget {
                 height: 110,
                 width: double.infinity,
                 child: IgnorePointer(
-                  child: GoogleMap(
+                  child: OpenStreetMapView(
                     key: ValueKey(
                       '${request.id}-${request.driverLatitude}-${request.driverLongitude}',
                     ),
-                    initialCameraPosition: CameraPosition(
-                      target: LatLng(request.driverLatitude.toDouble(), request.driverLongitude.toDouble()),
-                      zoom: 14,
-                    ),
-                    zoomControlsEnabled: false,
-                    scrollGesturesEnabled: false,
-                    zoomGesturesEnabled: false,
-                    rotateGesturesEnabled: false,
-                    tiltGesturesEnabled: false,
-                    markers: <Marker>{
+                    center: LatLng(request.driverLatitude.toDouble(), request.driverLongitude.toDouble()),
+                    zoom: 14,
+                    interactive: false,
+                    markers: <Marker>[
                       Marker(
-                        markerId: MarkerId('driver-${request.id}'),
-                        position: LatLng(request.driverLatitude.toDouble(), request.driverLongitude.toDouble()),
+                        point: LatLng(request.driverLatitude.toDouble(), request.driverLongitude.toDouble()),
+                        child: const Icon(Icons.directions_car, color: AppColors.primaryBlue, size: 30),
                       ),
-                    },
+                    ],
                   ),
                 ),
               ),

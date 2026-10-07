@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../core/app_colors.dart';
 import '../core/location_service.dart';
 import '../models/workshop.dart';
 import '../services/workshop_api.dart';
 import '../widgets/workshop_cards.dart';
+import '../widgets/open_street_map_view.dart';
 import 'workshop_profile_screen.dart';
 
 /// Workshops tab: full searchable directory plus a coverage-area overview.
@@ -246,24 +248,18 @@ class _CoverageAreaCard extends StatelessWidget {
                   height: 130,
                   width: double.infinity,
                   child: IgnorePointer(
-                    child: GoogleMap(
-                      initialCameraPosition: CameraPosition(
-                        target: LatLng(centerLatitude, centerLongitude),
-                        zoom: 11,
-                      ),
-                      zoomControlsEnabled: false,
-                      scrollGesturesEnabled: false,
-                      zoomGesturesEnabled: false,
-                      rotateGesturesEnabled: false,
-                      tiltGesturesEnabled: false,
-                      markers: <Marker>{
+                    child: OpenStreetMapView(
+                      center: LatLng(centerLatitude, centerLongitude),
+                      zoom: 11,
+                      interactive: false,
+                      markers: <Marker>[
                         for (final Workshop w in workshops)
                           if (w.latitude != null && w.longitude != null)
                             Marker(
-                              markerId: MarkerId('coverage-${w.id}'),
-                              position: LatLng(w.latitude!, w.longitude!),
+                              point: LatLng(w.latitude!, w.longitude!),
+                              child: const Icon(Icons.location_on, color: AppColors.burntOrange, size: 30),
                             ),
-                      },
+                      ],
                     ),
                   ),
                 ),

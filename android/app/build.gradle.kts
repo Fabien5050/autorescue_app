@@ -1,21 +1,8 @@
-import java.io.FileInputStream
-import java.util.Properties
-
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
-
-// Google Maps API key — kept out of git in local.properties, injected into
-// AndroidManifest.xml's ${mapsApiKey} placeholder below.
-val localProperties = Properties().apply {
-    val localPropertiesFile = rootProject.file("local.properties")
-    if (localPropertiesFile.exists()) {
-        FileInputStream(localPropertiesFile).use { load(it) }
-    }
-}
-val mapsApiKey: String = localProperties.getProperty("mapsApiKey") ?: "YOUR_GOOGLE_MAPS_API_KEY_HERE"
 
 android {
     namespace = "com.autorescue.autorescue_app"
@@ -38,8 +25,6 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        manifestPlaceholders["mapsApiKey"] = mapsApiKey
-
         // Agora's SDK bundles its own native .so files for every ABI
         // regardless of `flutter build --target-platform` — that flag only
         // restricts Flutter's own engine binary. Without this filter, a
@@ -58,7 +43,7 @@ android {
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
             // Strips unused code/resources from the app and every bundled
-            // native plugin (Agora, Google Maps, etc.) — off by default in
+            // native plugin (Agora, etc.) — off by default in
             // Flutter's template, but the single biggest lever for install
             // size. proguard-rules.pro keeps Agora's native-JNI-reached
             // classes intact, since R8 can't see those reflection calls.

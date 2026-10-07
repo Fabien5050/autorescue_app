@@ -52,8 +52,9 @@ dependencies:
   # Real device GPS.
   geolocator: ^14.0.2
 
-  # Real Google Maps rendering, replacing the painted StylizedMap stand-ins.
-  google_maps_flutter: ^2.18.0
+  # OpenStreetMap tiles render maps without a Google Maps API key.
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
   url_launcher: ^6.3.2
   web_socket_channel: ^3.0.3
   stomp_dart_client: ^3.0.1
